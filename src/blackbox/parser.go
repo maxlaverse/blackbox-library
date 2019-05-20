@@ -1,9 +1,8 @@
 package blackbox
 
 import (
-	"fmt"
-
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -130,7 +129,7 @@ func ParseFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame,
 		case EncodingNull:
 			value = 0
 		default:
-			return nil, fmt.Errorf("Unsupported decoding '%d' for field '%s'", field.Encoding, field.Name)
+			return nil, errors.Errorf("Unsupported decoding '%d' for field '%s'", field.Encoding, field.Name)
 		}
 
 		v, err := ApplyPrediction(frameDef, frameValues, i, int(field.Predictor), value, previousFrame, previousPreviousFrame)

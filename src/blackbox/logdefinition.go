@@ -1,7 +1,7 @@
 package blackbox
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -86,14 +86,14 @@ func (f *LogDefinition) GetHeaderValue(headerName string) (string, error) {
 			return v.Value, nil
 		}
 	}
-	return "", fmt.Errorf("Not found")
+	return "", errors.New("Not found")
 }
 
 // GetFieldIndex returns the position of a field
 func (f *LogDefinition) GetFieldIndex(fieldName string) (int, error) {
 	index, ok := f.FieldIRL[fieldName]
 	if !ok {
-		return 0, fmt.Errorf("Field definition for '%s' not found: %v", fieldName, f.FieldIRL)
+		return 0, errors.Errorf("Field definition for '%s' not found: %v", fieldName, f.FieldIRL)
 	}
 	return index, nil
 }

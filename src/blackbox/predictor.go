@@ -1,7 +1,7 @@
 package blackbox
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -80,7 +80,7 @@ func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, pre
 	case PredictorMinMotor:
 		value += int32(frameDef.Sysconfig.MotorOutputLow)
 	default:
-		return value, fmt.Errorf("Unsupported field predictor %d", predictor)
+		return value, errors.Errorf("Unsupported field predictor %d", predictor)
 	}
 
 	return value, nil

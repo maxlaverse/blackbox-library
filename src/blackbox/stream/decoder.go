@@ -3,6 +3,8 @@ package stream
 import (
 	"bufio"
 	"io"
+
+	"github.com/pkg/errors"
 )
 
 /*
@@ -49,7 +51,7 @@ func (d *Decoder) ReadBytes(number int) ([]byte, error) {
 	bytes := make([]byte, number)
 	n, err := d.reader.Read(bytes)
 	if err != nil {
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	d.statBytesRead += int64(n)
 	return bytes, nil
@@ -59,7 +61,7 @@ func (d *Decoder) ReadBytes(number int) ([]byte, error) {
 func (d *Decoder) NextByte() (byte, error) {
 	bytes, err := d.reader.Peek(1)
 	if err != nil {
-		return 0, err
+		return 0, errors.WithStack(err)
 	}
 	return bytes[0], nil
 }
