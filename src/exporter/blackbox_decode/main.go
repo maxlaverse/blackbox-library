@@ -1,21 +1,23 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
-	"github.com/maxlaverse/blackbox-library/src/exporter/exporter"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox"
+	"github.com/maxlaverse/blackbox-library/src/exporter/exporter"
 	"github.com/spf13/cobra"
 )
 
 type cmdOptions struct {
 	raw     bool
+	debug   bool
 	verbose int
 }
 
@@ -36,6 +38,7 @@ func main() {
 
 	cmd.Flags().IntVarP(&opts.verbose, "verbose", "v", 0, "Be verbose on log output")
 	cmd.Flags().BoolVarP(&opts.raw, "raw", "", false, "Don't apply predictions to fields (show raw field deltas)")
+	cmd.Flags().BoolVarP(&opts.raw, "debug", "", false, "Show extra debugging information")
 
 	if err := cmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
@@ -67,9 +70,10 @@ func export(sourceFilepath string, opts cmdOptions) error {
 		return err
 	}
 	defer csvFile.Close()
+	bufferedWriter := bufio.NewWriter(csvFile)
 
 	// prepare exporter and write CSV headers
-	csvExporter := exporter.NewCsvFrameExporter(csvFile)
+	csvExporter := exporter.NewCsvFrameExporter(bufferedWriter, opts.debug)
 
 	// iterate over frames and write them to CSV
 	ctx := context.Background()
