@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"github.com/maxlaverse/blackbox-library/src/exporter/exporter"
@@ -54,18 +55,43 @@ func export(sourceFilepath string, opts cmdOptions) error {
 	}
 	defer logFile.Close()
 
-	readerOpts := blackbox.FlightLogReaderOpts{
-		Raw: opts.raw,
-	}
-
+	// prepare reader and target file
+	readerOpts := blackbox.FlightLogReaderOpts{Raw: opts.raw}
 	flightLog := blackbox.NewFlightLogReader(readerOpts)
-	flightLog.LoadFile(logFile)
-
 	csvFile, err := os.Create(csvFilepath)
 	if err != nil {
 		return err
 	}
 	defer csvFile.Close()
 
-	return exporter.WriteToCsv(&flightLog, csvFile)
+	// prepare exporter and write CSV headers
+	csvExporter := exporter.NewCsvFrameExporter(csvFile)
+	err = csvExporter.WriteHeaders(flightLog.FrameDef)
+	if err != nil {
+		return err
+	}
+
+	// iterate over frames and write them to CSV
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	frameChan, errChan := flightLog.LoadFile(logFile, ctx)
+	for {
+		select {
+
+		// read frames and write to CSV
+		case frame := <-frameChan:
+			err = csvExporter.WriteFrame(frame)
+			if err != nil {
+				cancel()
+				return err
+			}
+
+		// read errors
+		case err := <-errChan:
+			cancel()
+			return err
+
+		default:
+		}
+	}
 }

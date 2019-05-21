@@ -15,7 +15,7 @@ func TestReadFrameI(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(dec, frameDef, nil)
 	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
@@ -29,7 +29,7 @@ func TestReadFrameS(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(dec, frameDef, nil)
 	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
@@ -43,7 +43,7 @@ func TestReadFrameEventLoggingResume(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(dec, frameDef, nil)
 	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
@@ -68,7 +68,7 @@ func TestReadFrameEventSyncBeep(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(dec, frameDef, nil)
 	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
@@ -87,7 +87,7 @@ func TestReadFrameEventLogEnd(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(dec, frameDef, nil)
 	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
@@ -107,7 +107,7 @@ func TestReadFrameEventLogEndCorrupt(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(dec, frameDef, nil)
 	assert.NoError(t, err)
 
 	_, err = frameReader.ReadNextFrame()
@@ -120,7 +120,7 @@ func TestReadStream(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(dec, frameDef, nil)
 	assert.NoError(t, err)
 
 	decodedFrames := []Frame{
@@ -148,7 +148,7 @@ func TestReadBrokenFrame(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(dec, frameDef, nil)
 	assert.NoError(t, err)
 
 	decodedFrames := []Frame{

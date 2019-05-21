@@ -22,8 +22,8 @@ type Decoder struct {
 }
 
 // NewDecoder returns a new instance of a Decoder
-func NewDecoder(reader io.Reader) Decoder {
-	return Decoder{
+func NewDecoder(reader io.Reader) *Decoder {
+	return &Decoder{
 		reader:        bufio.NewReaderSize(reader, 8*1024),
 		statBytesRead: 0,
 	}
