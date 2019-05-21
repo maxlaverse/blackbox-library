@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -59,7 +60,7 @@ func (h *HeaderReader) ProcessHeaders() (LogDefinition, error) {
 		for {
 			iteration, err := h.enc.ReadByte()
 			if err != nil {
-				panic(err)
+				return h.def, errors.WithStack(err)
 			}
 			if string(iteration) == "\n" {
 				h.parseHeader(strings.Join(truc, ""))

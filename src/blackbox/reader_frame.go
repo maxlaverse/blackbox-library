@@ -8,6 +8,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -136,7 +137,7 @@ func (f *FrameReader) ReadNextFrame() (*Frame, error) {
 		//TODO: If a P frame is corrupt here, we should optionally drop the previous one (As the original implementation does)
 		f.flightLogReaderInvalidateStream()
 		f.Stats.TotalCorruptedFrames++
-		return nil, fmt.Errorf("Frame type '%s' (b'%b') is not supported", string(command), command)
+		return nil, errors.Errorf("Frame type '%s' (b'%b') is not supported", string(command), command)
 	}
 }
 
@@ -203,7 +204,7 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) error {
 			return err
 		}
 		if !reachedEndOfFile {
-			return fmt.Errorf("There are additional data after the end of the file")
+			return errors.New("There are additional data after the end of the file")
 		}
 		f.Finished = true
 	default:
