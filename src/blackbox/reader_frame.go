@@ -20,7 +20,7 @@ const (
 // FrameReader reads and decodes data frame
 type FrameReader struct {
 	LoggingResumeLogIteration int32
-	LastEventType             LogEventType
+	LastEventType             *LogEventType
 	LastSkippedFrames         int32
 	LoggingResumeCurrentTime  int32
 	timeRolloverAccumulator   int32
@@ -146,9 +146,9 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) error {
 	if err != nil {
 		return err
 	}
-	f.LastEventType = LogEventType(event)
+	f.LastEventType = &event
 
-	switch f.LastEventType {
+	switch event {
 	case LogEventSyncBeep:
 		beepTime, err := dec.ReadUnsignedVB()
 		if err != nil {
@@ -259,7 +259,7 @@ func (f *FrameReader) Complete(frame Frame) bool {
 	case LogFrameEvent:
 		return f.completeEventFrame()
 	default:
-		panic(fmt.Sprintf("Unable to complete '%s'", frame.Type()))
+		panic(fmt.Sprintf("Unable to complete '%s'", string(frame.Type())))
 	}
 }
 
@@ -315,8 +315,8 @@ func (f *FrameReader) completeSlowFrame(frame *SlowFrame) bool {
 }
 
 func (f *FrameReader) completeEventFrame() bool {
-	if f.LastEventType != -1 {
-		if f.LastEventType == LogEventLoggingResume {
+	if f.LastEventType != nil {
+		if *f.LastEventType == LogEventLoggingResume {
 			f.LastMainFrameIteration = f.LoggingResumeLogIteration
 			f.LastMainFrameTime = f.LoggingResumeCurrentTime
 		}
@@ -400,7 +400,7 @@ func (f *FrameReader) PrintStatistics() {
 	fmt.Println("Statistics")
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', tabwriter.AlignRight)
 	for t, f := range f.Stats.Frame {
-		fmt.Fprintf(w, "%s frames\t %d valid\t %d desync\t %d bytes\t %d corrupt\t %d sizes\t\n", t, f.ValidCount, f.DesyncCount, f.Bytes, f.CorruptCount, len(f.SizeCount))
+		fmt.Fprintf(w, "%s frames\t %d valid\t %d desync\t %d bytes\t %d corrupt\t %d sizes\t\n", string(t), f.ValidCount, f.DesyncCount, f.Bytes, f.CorruptCount, len(f.SizeCount))
 	}
 	w.Flush()
 }

@@ -2,6 +2,7 @@ package blackbox
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 
@@ -75,7 +76,7 @@ func consumeToNext(enc stream.Decoder) int64 {
 		}
 
 		fmt.Printf("%d:%v, ", i, string(b))
-		if string(b) == "S" || string(b) == "H" || string(b) == "E" || string(b) == "I" || string(b) == "P" || string(b) == "G" {
+		if bytes.IndexByte(LogFrameAllTypes, b) != -1 {
 			newPos := enc.BytesRead()
 			return newPos - intialPos
 		}
