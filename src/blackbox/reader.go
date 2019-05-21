@@ -56,12 +56,11 @@ func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan 
 			f.Stats = frameReader.Stats
 		}()
 
-	Loop:
 		for !frameReader.Finished {
 			// check on every iteration if the context has been canceled and stop processing if so
 			select {
 			case <-ctx.Done():
-				break Loop
+				return
 			default:
 			}
 
