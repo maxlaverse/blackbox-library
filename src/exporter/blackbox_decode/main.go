@@ -58,6 +58,10 @@ func export(sourceFilepath string, opts cmdOptions) error {
 	// prepare reader and target file
 	readerOpts := blackbox.FlightLogReaderOpts{Raw: opts.raw}
 	flightLog := blackbox.NewFlightLogReader(readerOpts)
+	defer func() {
+		fmt.Println(flightLog.Stats)
+	}()
+
 	csvFile, err := os.Create(csvFilepath)
 	if err != nil {
 		return err

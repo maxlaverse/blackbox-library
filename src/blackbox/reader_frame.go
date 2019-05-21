@@ -1,11 +1,7 @@
 package blackbox
 
 import (
-	"fmt"
-	"os"
 	"strconv"
-
-	"text/tabwriter"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
 	"github.com/pkg/errors"
@@ -33,7 +29,7 @@ type FrameReader struct {
 	frameIntervalI            int
 	frameIntervalPNum         int
 	frameIntervalPDenom       int
-	Stats                     StatsType
+	Stats                     *StatsType
 	dec                       *stream.Decoder
 	frameDef                  LogDefinition
 	raw                       bool
@@ -66,7 +62,7 @@ func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameRead
 		frameIntervalI:      int(frameIntervalI),
 		frameIntervalPNum:   1,
 		frameIntervalPDenom: 1,
-		Stats: StatsType{
+		Stats: &StatsType{
 			Frame: map[LogFrameType]StatsFrameType{},
 		},
 		LastMainFrameIteration: -1,
@@ -394,20 +390,4 @@ func (f *FrameReader) countIntentionallySkippedFrames() int32 {
 
 func (f *FrameReader) shouldHaveFrame(frameIndex int) bool {
 	return (frameIndex%f.frameIntervalI+f.frameIntervalPNum-1)%f.frameIntervalPDenom < f.frameIntervalPNum
-}
-
-// PrintStatistics prints statistics on the log
-func (f *FrameReader) PrintStatistics() {
-	fmt.Println("Statistics")
-	w1 := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', tabwriter.AlignRight)
-	fmt.Fprintf(w1, "TotalFrames\t %d\n", f.Stats.TotalFrames)
-	fmt.Fprintf(w1, "TotalCorruptedFrames\t %d\n", f.Stats.TotalCorruptedFrames)
-	w1.Flush()
-
-	fmt.Println("Statistics")
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', tabwriter.AlignRight)
-	for t, f := range f.Stats.Frame {
-		fmt.Fprintf(w, "%s frames\t %d valid\t %d desync\t %d bytes\t %d corrupt\t %d sizes\t\n", string(t), f.ValidCount, f.DesyncCount, f.Bytes, f.CorruptCount, len(f.SizeCount))
-	}
-	w.Flush()
 }
