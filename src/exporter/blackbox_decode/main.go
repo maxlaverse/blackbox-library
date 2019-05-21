@@ -70,20 +70,27 @@ func export(sourceFilepath string, opts cmdOptions) error {
 
 	// prepare exporter and write CSV headers
 	csvExporter := exporter.NewCsvFrameExporter(csvFile)
-	err = csvExporter.WriteHeaders(flightLog.FrameDef)
-	if err != nil {
-		return err
-	}
 
 	// iterate over frames and write them to CSV
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
 	frameChan, errChan := flightLog.LoadFile(logFile, ctx)
+	headersSent := false
 	for {
 		select {
 
 		// read frames and write to CSV
 		case frame := <-frameChan:
+			// write headers before first row
+			if !headersSent {
+				err = csvExporter.WriteHeaders(flightLog.FrameDef)
+				headersSent = true
+			}
+			if err != nil {
+				return err
+			}
+
+			// write CSV row
 			err = csvExporter.WriteFrame(frame)
 			if err != nil {
 				cancel()
