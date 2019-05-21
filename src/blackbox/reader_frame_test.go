@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestReadFrameI(t *testing.T) {
@@ -19,7 +19,7 @@ func TestReadFrameI(t *testing.T) {
 
 	frame, err := frameReader.ReadNextFrame()
 	assert.Nil(t, err)
-	assert.Equal(t, &Frame{Type: "I", Start: 0, End: 51, Values: decodedPredictedFrameI}, frame)
+	assert.Equal(t, NewMainFrame(LogFrameIntra, decodedPredictedFrameI, 0, 51), frame)
 }
 
 func TestReadFrameS(t *testing.T) {
@@ -32,7 +32,7 @@ func TestReadFrameS(t *testing.T) {
 
 	frame, err := frameReader.ReadNextFrame()
 	assert.Nil(t, err)
-	assert.Equal(t, &Frame{Type: "S", Start: 0, End: 1, Values: []int32{}}, frame)
+	assert.Equal(t, NewSlowFrame([]int32{}, 0, 1), frame)
 }
 
 func TestReadFrameEventLoggingResume(t *testing.T) {
@@ -45,7 +45,7 @@ func TestReadFrameEventLoggingResume(t *testing.T) {
 
 	frame, err := frameReader.ReadNextFrame()
 	assert.Nil(t, err)
-	assert.Equal(t, &Frame{Type: "E", Start: 0, End: 9, Values: nil}, frame)
+	assert.Equal(t, NewEventFrame(LogEventSyncBeep, nil, 0, 9), frame)
 	assert.Equal(t, int32(55158008), frameReader.LoggingResumeCurrentTime)
 	assert.Equal(t, int32(52992), frameReader.LoggingResumeLogIteration)
 }
@@ -60,7 +60,7 @@ func TestReadFrameEventSyncBeep(t *testing.T) {
 
 	frame, err := frameReader.ReadNextFrame()
 	assert.Nil(t, err)
-	assert.Equal(t, &Frame{Type: "E", Start: 0, End: 6, Values: nil}, frame)
+	assert.Equal(t, NewEventFrame(LogEventSyncBeep, nil, 0, 6), frame)
 }
 
 func TestReadFrameEventLogEnd(t *testing.T) {
@@ -73,7 +73,7 @@ func TestReadFrameEventLogEnd(t *testing.T) {
 
 	frame, err := frameReader.ReadNextFrame()
 	assert.Nil(t, err)
-	assert.Equal(t, &Frame{Type: "E", Start: 0, End: 12, Values: nil}, frame)
+	assert.Equal(t, NewEventFrame(LogEventSyncBeep, nil, 0, 12), frame)
 	assert.Equal(t, true, frameReader.Finished)
 }
 
@@ -97,14 +97,14 @@ func TestReadStream(t *testing.T) {
 
 	frameReader := NewFrameReader(&dec, frameDef, nil)
 
-	decodedFrames := []*Frame{
-		&Frame{Type: "I", Start: 0, End: 51, Values: decodedPredictedFrameI},
-		&Frame{Type: "P", Start: 51, End: 80, Values: decodedPredictedFramesP[0]},
-		&Frame{Type: "P", Start: 80, End: 108, Values: decodedPredictedFramesP[1]},
-		&Frame{Type: "P", Start: 108, End: 136, Values: decodedPredictedFramesP[2]},
-		&Frame{Type: "P", Start: 136, End: 164, Values: decodedPredictedFramesP[3]},
-		&Frame{Type: "P", Start: 164, End: 194, Values: decodedPredictedFramesP[4]},
-		&Frame{Type: "P", Start: 194, End: 224, Values: decodedPredictedFramesP[5]},
+	decodedFrames := []Frame{
+		NewMainFrame(LogFrameIntra, decodedPredictedFrameI, 0, 51),
+		NewMainFrame(LogFrameInter, decodedPredictedFramesP[0], 51, 80),
+		NewMainFrame(LogFrameInter, decodedPredictedFramesP[1], 80, 108),
+		NewMainFrame(LogFrameInter, decodedPredictedFramesP[2], 108, 136),
+		NewMainFrame(LogFrameInter, decodedPredictedFramesP[3], 136, 164),
+		NewMainFrame(LogFrameInter, decodedPredictedFramesP[4], 164, 194),
+		NewMainFrame(LogFrameInter, decodedPredictedFramesP[5], 194, 224),
 	}
 
 	for idx, decodedFrame := range decodedFrames {
@@ -124,10 +124,10 @@ func TestReadBrokenFrame(t *testing.T) {
 
 	frameReader := NewFrameReader(&dec, frameDef, nil)
 
-	decodedFrames := []*Frame{
-		&Frame{Type: "I", Start: 0, End: 51, Values: decodedPredictedFrameI},
-		&Frame{Type: "P", Start: 51, End: 80, Values: decodedPredictedFramesP[0]},
-		&Frame{Type: "P", Start: 80, End: 108, Values: decodedPredictedFramesP[1]},
+	decodedFrames := []Frame{
+		NewMainFrame(LogFrameIntra, decodedPredictedFrameI, 0, 51),
+		NewMainFrame(LogFrameInter, decodedPredictedFramesP[0], 51, 80),
+		NewMainFrame(LogFrameInter, decodedPredictedFramesP[1], 80, 108),
 	}
 
 	for idx, decodedFrame := range decodedFrames {

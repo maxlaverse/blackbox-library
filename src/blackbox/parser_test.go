@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
+	"github.com/stretchr/testify/assert"
 )
 
 var encodedFrameI = []byte{73, 128, 163, 3, 251, 171, 176, 26, 0, 4, 0, 6, 3, 3, 10, 6, 0, 0, 0, 3, 0, 0, 192, 9, 1, 0, 0, 176, 3, 233, 1, 166, 11, 145, 6, 1, 3, 0, 54, 116, 250, 34, 4, 14, 0, 0, 140, 3, 35, 36, 38}
@@ -86,11 +86,11 @@ func TestParseFramePPredicted(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, decodedPredictedFrameI, res)
 
-	previousPreviousFrame := &Frame{
-		Values: res,
+	previousPreviousFrame := &MainFrame{
+		values: res,
 	}
-	previousFrame := &Frame{
-		Values: res,
+	previousFrame := &MainFrame{
+		values: res,
 	}
 
 	for idx, decodedFrame := range decodedPredictedFramesP {
@@ -100,8 +100,8 @@ func TestParseFramePPredicted(t *testing.T) {
 			assert.Equal(t, decodedFrame, res)
 
 			previousPreviousFrame = previousFrame
-			previousFrame = &Frame{
-				Values: res,
+			previousFrame = &MainFrame{
+				values: res,
 			}
 		})
 	}

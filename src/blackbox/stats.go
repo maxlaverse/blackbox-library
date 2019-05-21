@@ -5,7 +5,7 @@ type StatsType struct {
 	TotalCorruptedFrames          int
 	IntentionallyAbsentIterations int
 	TotalFrames                   int
-	Frame                         map[string]StatsFrameType
+	Frame                         map[LogFrameType]StatsFrameType
 }
 
 // StatsFrameType represents stats for one type of freame

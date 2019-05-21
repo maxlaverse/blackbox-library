@@ -4,6 +4,30 @@ import (
 	"github.com/pkg/errors"
 )
 
+type LogFrameType string
+
+const (
+	// See https://cleanflight.readthedocs.io/en/stable/development/Blackbox%20Internals/
+	LogFrameEvent LogFrameType = "E"
+	LogFrameIntra              = "I"
+	LogFrameInter              = "P"
+	LogFrameSlow               = "S"
+)
+
+// -------------------------------------------------------------------------- //
+
+type LogEventType int32
+
+const (
+	LogEventSyncBeep           LogEventType = 0
+	LogEventInflightAdjustment              = 13
+	LogEventLoggingResume                   = 14
+	LogEventFlightMode                      = 30
+	LogEventLogEnd                          = 255
+)
+
+// -------------------------------------------------------------------------- //
+
 const (
 	firmwareTypeUnknown = "Unknown firmware"
 )

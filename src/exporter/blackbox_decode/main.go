@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/maxlaverse/blackbox-library/src/exporter/exporter"
 	"os"
 	"path"
 	"strconv"
@@ -66,5 +67,5 @@ func export(sourceFilepath string, opts cmdOptions) error {
 	}
 	defer csvFile.Close()
 
-	return writeToCsv(&flightLog, csvFile)
+	return exporter.WriteToCsv(&flightLog, csvFile)
 }

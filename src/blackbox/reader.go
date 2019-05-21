@@ -58,7 +58,7 @@ func (f *FlightLogReader) LoadFile(file io.Reader) error {
 			continue
 		}
 
-		f.Frames = append(f.Frames, *frame)
+		f.Frames = append(f.Frames, frame)
 	}
 
 	frameReader.PrintStatistics()

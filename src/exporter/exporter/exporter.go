@@ -1,4 +1,4 @@
-package main
+package exporter
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"github.com/maxlaverse/blackbox-library/src/blackbox"
 )
 
-func writeToCsv(f *blackbox.FlightLogReader, file *os.File) error {
+func WriteToCsv(f *blackbox.FlightLogReader, file *os.File) error {
 	headers := []string{}
 	for _, f := range f.FrameDef.FieldsI {
 		headers = append(headers, unitForField(f.Name))
@@ -24,19 +24,21 @@ func writeToCsv(f *blackbox.FlightLogReader, file *os.File) error {
 
 	file.WriteString("\n")
 	numberOfFramesRead := 0
-	lastSlow := blackbox.NewFrame("S", []int32{0, 0, 0, 0, 0}, 0, 0)
+	lastSlow := blackbox.NewSlowFrame([]int32{0, 0, 0, 0, 0}, 0, 0)
 	for _, frame := range f.Frames {
-		if frame.Type == "E" {
+		switch frame.(type) {
+
+		case *blackbox.EventFrame:
 			continue
-		}
-		numberOfFramesRead++
-		if frame.Type == "S" {
-			*lastSlow = frame
-			continue
-		}
-		if frame.Type == "I" || frame.Type == "P" {
+
+		case *blackbox.SlowFrame:
+			numberOfFramesRead++
+			lastSlow = frame.(*blackbox.SlowFrame)
+
+		case *blackbox.MainFrame:
+			numberOfFramesRead++
 			values := []string{}
-			for k, v := range frame.Values {
+			for k, v := range frame.Values().([]int32) {
 				//TODO: Read those header index dynamically
 				if k == 21 {
 					values = append(values, prependSpace(k, fmt.Sprintf("%.3f", (33.0*float64(v)*110)/4095.0/100.0)))
@@ -52,7 +54,7 @@ func writeToCsv(f *blackbox.FlightLogReader, file *os.File) error {
 				}
 				values = append(values, prependSpace(k, fmt.Sprintf("%d", v)))
 			}
-			for k, v := range lastSlow.Values {
+			for k, v := range lastSlow.Values().([]int32) {
 				values = append(values, parseFlags(k, fmt.Sprintf("%d", v)))
 			}
 			_, err := file.WriteString(strings.Join(values, ", "))
@@ -60,6 +62,7 @@ func writeToCsv(f *blackbox.FlightLogReader, file *os.File) error {
 				return err
 			}
 		}
+
 		file.WriteString("\n")
 	}
 	fmt.Printf("Wrote %d frames\n", numberOfFramesRead)

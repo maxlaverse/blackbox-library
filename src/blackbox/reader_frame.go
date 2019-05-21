@@ -14,19 +14,13 @@ import (
 const (
 	maximumIterationJumpBetweenFrames = 5000
 	maximumTimeJumpBetweenFrames      = 10 * 1000000
-
-	logEventSyncBeep           = 0
-	logEventInflightAdjustment = 13
-	logEventLoggingResume      = 14
-	logEventFlightMode         = 30
-	logEventLogEnd             = 255
-	logEventMaxFrameLength     = 256
+	logEventMaxFrameLength            = 256
 )
 
 // FrameReader reads and decodes data frame
 type FrameReader struct {
 	LoggingResumeLogIteration int32
-	LastEventType             int32
+	LastEventType             LogEventType
 	LastSkippedFrames         int32
 	LoggingResumeCurrentTime  int32
 	timeRolloverAccumulator   int32
@@ -34,8 +28,8 @@ type FrameReader struct {
 	LastMainFrameIteration    int32
 	LastMainFrameTime         int32
 	MainStreamIsValid         bool
-	Previous                  *Frame
-	PreviousPrevious          *Frame
+	Previous                  *MainFrame
+	PreviousPrevious          *MainFrame
 	frameIntervalI            int
 	frameIntervalPNum         int
 	frameIntervalPDenom       int
@@ -73,7 +67,7 @@ func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameRead
 		frameIntervalPNum:   1,
 		frameIntervalPDenom: 1,
 		Stats: StatsType{
-			Frame: map[string]StatsFrameType{},
+			Frame: map[LogFrameType]StatsFrameType{},
 		},
 		LastMainFrameIteration: -1,
 		LastMainFrameTime:      -1,
@@ -86,53 +80,59 @@ func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameRead
 }
 
 // ReadNextFrame reads the next frame
-func (f *FrameReader) ReadNextFrame() (*Frame, error) {
+func (f *FrameReader) ReadNextFrame() (Frame, error) {
 	start := f.dec.BytesRead()
 
 	command, err := f.dec.ReadByte()
 	if err != nil {
 		return nil, err
 	}
+	frameType := LogFrameType(command)
 
 	//Next byte should be readable if stream is valid
-	switch string(command) {
-	case "E":
+	switch frameType {
+	case LogFrameEvent:
 		err := f.parseEventFrame(f.dec)
 		if err != nil {
 			return nil, err
 		}
 		end := f.dec.BytesRead()
-		frame := NewFrame("E", nil, start, end)
+		// @TODO: parse event properly
+		frame := NewEventFrame(LogEventSyncBeep, nil, start, end)
 		f.PreComplete(frame)
 		return frame, nil
-	case "I":
+
+	case LogFrameIntra:
 		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsI, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
 		if err != nil {
 			return nil, err
 		}
 		end := f.dec.BytesRead()
-		frame := NewFrame("I", values, start, end)
+		frame := NewMainFrame(frameType, values, start, end)
 		f.PreComplete(frame)
 		return frame, nil
-	case "P":
+
+	case LogFrameInter:
 		f.LastSkippedFrames = f.countIntentionallySkippedFrames()
 		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsP, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
 		if err != nil {
 			return nil, err
 		}
 		end := f.dec.BytesRead()
-		frame := NewFrame("P", values, start, end)
+		frame := NewMainFrame(frameType, values, start, end)
 		f.PreComplete(frame)
 		return frame, nil
-	case "S":
+
+	case LogFrameSlow:
 		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsS, nil, nil, f.dec, f.raw, 0)
 		if err != nil {
 			return nil, err
 		}
 		end := f.dec.BytesRead()
-		frame := NewFrame("S", values, start, end)
+		frame := NewSlowFrame(values, start, end)
 		f.PreComplete(frame)
 		return frame, nil
+
 	default:
 		//TODO: If a P frame is corrupt here, we should optionally drop the previous one (As the original implementation does)
 		f.flightLogReaderInvalidateStream()
@@ -146,9 +146,10 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) error {
 	if err != nil {
 		return err
 	}
-	f.LastEventType = int32(event)
-	switch int(event) {
-	case logEventSyncBeep:
+	f.LastEventType = LogEventType(event)
+
+	switch f.LastEventType {
+	case LogEventSyncBeep:
 		beepTime, err := dec.ReadUnsignedVB()
 		if err != nil {
 			return err
@@ -156,10 +157,10 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) error {
 		fmt.Printf("Frame #X (E) ")
 		fmt.Printf("%s=%d ", "beepTime", beepTime)
 		fmt.Printf("\n")
-	case logEventInflightAdjustment:
+	case LogEventInflightAdjustment:
 		fmt.Printf("Event type is logEventInflightAdjustment\n")
 		panic("Not implemented: logEventInflightAdjustment")
-	case logEventLoggingResume:
+	case LogEventLoggingResume:
 		val, err := dec.ReadUnsignedVB()
 		if err != nil {
 			return err
@@ -176,7 +177,7 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) error {
 		fmt.Printf("%s=%d ", "iteration", f.LoggingResumeLogIteration)
 		fmt.Printf("%s=%d ", "currentTime", f.LoggingResumeCurrentTime)
 		fmt.Printf("\n")
-	case logEventFlightMode:
+	case LogEventFlightMode:
 		fmt.Printf("Frame #X (%s) ", "E")
 		flags, err := dec.ReadUnsignedVB()
 		if err != nil {
@@ -190,7 +191,7 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) error {
 		}
 		fmt.Printf("%s=%d ", "lastFlags", lastFlags)
 		fmt.Printf("\n")
-	case logEventLogEnd:
+	case LogEventLogEnd:
 
 		val, err := dec.ReadBytes(12)
 		if err != nil {
@@ -214,55 +215,55 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) error {
 }
 
 // PreComplete updates the reading state machine based on a frame
-func (f *FrameReader) PreComplete(frame *Frame) bool {
+func (f *FrameReader) PreComplete(frame Frame) bool {
 	f.Stats.TotalFrames++
 	if frame.Size() <= logEventMaxFrameLength {
 		frameAccepted := f.Complete(frame)
 		if frameAccepted {
-			d := f.Stats.Frame[frame.Type]
+			d := f.Stats.Frame[frame.Type()]
 			d.Bytes += int64(frame.Size())
 			d.ValidCount++
 			if d.SizeCount == nil {
 				d.SizeCount = map[int]int{}
 			}
 			d.SizeCount[frame.Size()]++
-			f.Stats.Frame[frame.Type] = d
+			f.Stats.Frame[frame.Type()] = d
 			return true
 		}
 
-		d := f.Stats.Frame[frame.Type]
+		d := f.Stats.Frame[frame.Type()]
 		d.DesyncCount++
-		f.Stats.Frame[frame.Type] = d
+		f.Stats.Frame[frame.Type()] = d
 		return false
 
 	}
 
 	fmt.Printf("The previous frame was corrupt - Main stream is not valid anymore\n")
 	f.MainStreamIsValid = false
-	d := f.Stats.Frame[frame.Type]
+	d := f.Stats.Frame[frame.Type()]
 	d.CorruptCount++
-	f.Stats.Frame[frame.Type] = d
+	f.Stats.Frame[frame.Type()] = d
 	f.Stats.TotalCorruptedFrames++
 	panic(frame.Size())
 }
 
 // Complete aknowledge and saves a frame
-func (f *FrameReader) Complete(frame *Frame) bool {
-	switch frame.Type {
-	case "I":
-		return f.completeFrameIntra(frame)
-	case "P":
-		return f.completeFrameInter(frame)
-	case "E":
+func (f *FrameReader) Complete(frame Frame) bool {
+	switch frame.Type() {
+	case LogFrameIntra:
+		return f.completeFrameIntra(frame.(*MainFrame))
+	case LogFrameInter:
+		return f.completeFrameInter(frame.(*MainFrame))
+	case LogFrameSlow:
+		return f.completeSlowFrame(frame.(*SlowFrame))
+	case LogFrameEvent:
 		return f.completeEventFrame()
-	case "S":
-		return f.completeSlowFrame(frame)
 	default:
-		panic(fmt.Sprintf("Unable to complete '%s'", frame.Type))
+		panic(fmt.Sprintf("Unable to complete '%s'", frame.Type()))
 	}
 }
 
-func (f *FrameReader) completeFrameIntra(frame *Frame) bool {
+func (f *FrameReader) completeFrameIntra(frame *MainFrame) bool {
 	// Change time
 	f.flightLogApplyMainFrameTimeRollover(frame)
 
@@ -274,10 +275,10 @@ func (f *FrameReader) completeFrameIntra(frame *Frame) bool {
 	}
 
 	if f.MainStreamIsValid {
-		f.Stats.IntentionallyAbsentIterations += int(f.countIntentionallySkippedFramesTo(frame.Values[0]))
+		f.Stats.IntentionallyAbsentIterations += int(f.countIntentionallySkippedFramesTo(frame.values[0]))
 
-		f.LastMainFrameIteration = frame.Values[0]
-		f.LastMainFrameTime = frame.Values[1]
+		f.LastMainFrameIteration = frame.values[0]
+		f.LastMainFrameTime = frame.values[1]
 	}
 
 	if f.MainStreamIsValid {
@@ -288,7 +289,7 @@ func (f *FrameReader) completeFrameIntra(frame *Frame) bool {
 	return f.MainStreamIsValid
 }
 
-func (f *FrameReader) completeFrameInter(frame *Frame) bool {
+func (f *FrameReader) completeFrameInter(frame *MainFrame) bool {
 	f.flightLogApplyMainFrameTimeRollover(frame)
 
 	if f.LastMainFrameIteration != -1 && !f.verifyFrameMainValues(frame) {
@@ -296,8 +297,8 @@ func (f *FrameReader) completeFrameInter(frame *Frame) bool {
 	}
 
 	if f.MainStreamIsValid {
-		f.LastMainFrameIteration = frame.Values[0]
-		f.LastMainFrameTime = frame.Values[1]
+		f.LastMainFrameIteration = frame.values[0]
+		f.LastMainFrameTime = frame.values[1]
 		f.Stats.IntentionallyAbsentIterations += int(f.LastSkippedFrames)
 	}
 
@@ -309,13 +310,13 @@ func (f *FrameReader) completeFrameInter(frame *Frame) bool {
 	return f.MainStreamIsValid
 }
 
-func (f *FrameReader) completeSlowFrame(frame *Frame) bool {
+func (f *FrameReader) completeSlowFrame(frame *SlowFrame) bool {
 	return true
 }
 
 func (f *FrameReader) completeEventFrame() bool {
 	if f.LastEventType != -1 {
-		if f.LastEventType == logEventLoggingResume {
+		if f.LastEventType == LogEventLoggingResume {
 			f.LastMainFrameIteration = f.LoggingResumeLogIteration
 			f.LastMainFrameTime = f.LoggingResumeCurrentTime
 		}
@@ -348,8 +349,8 @@ func (f *FrameReader) countIntentionallySkippedFramesTo(targetIteration int32) i
 	return int32(count)
 }
 
-func (f *FrameReader) flightLogApplyMainFrameTimeRollover(frame *Frame) {
-	frame.Values[1] = f.flightLogDetectAndApplyTimestampRollover(frame.Values[1])
+func (f *FrameReader) flightLogApplyMainFrameTimeRollover(frame *MainFrame) {
+	frame.values[1] = f.flightLogDetectAndApplyTimestampRollover(frame.values[1])
 }
 
 func (f *FrameReader) flightLogDetectAndApplyTimestampRollover(timestamp int32) int32 {
@@ -363,8 +364,11 @@ func (f *FrameReader) flightLogDetectAndApplyTimestampRollover(timestamp int32) 
 }
 
 // verifyFrameMainValues verifies if the frame's loopIteration and time makes sense
-func (f *FrameReader) verifyFrameMainValues(frame *Frame) bool {
-	return frame.Values[0] >= f.LastMainFrameIteration && frame.Values[0] < f.LastMainFrameIteration+maximumIterationJumpBetweenFrames && frame.Values[1] >= f.LastMainFrameTime && frame.Values[1] < f.LastMainFrameTime+maximumTimeJumpBetweenFrames
+func (f *FrameReader) verifyFrameMainValues(frame *MainFrame) bool {
+	return frame.values[0] >= f.LastMainFrameIteration &&
+		frame.values[0] < f.LastMainFrameIteration+maximumIterationJumpBetweenFrames &&
+		frame.values[1] >= f.LastMainFrameTime &&
+		frame.values[1] < f.LastMainFrameTime+maximumTimeJumpBetweenFrames
 }
 
 func (f *FrameReader) countIntentionallySkippedFrames() int32 {

@@ -43,7 +43,7 @@ const (
 )
 
 // ApplyPrediction a predictor on a field and return the resulting value
-func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, predictor int, value int32, previous *Frame, previous2 *Frame) (int32, error) {
+func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, predictor int, value int32, previous *MainFrame, previous2 *MainFrame) (int32, error) {
 
 	// First see if we have a prediction that doesn't require a previous frame as reference:
 	switch predictor {
@@ -66,17 +66,17 @@ func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, pre
 		if previous == nil {
 			break
 		}
-		value = value + previous.Values[fieldIndex]
+		value = value + previous.values[fieldIndex]
 	case PredictorStraightLine:
 		if previous == nil {
 			break
 		}
-		value = value + 2*previous.Values[fieldIndex] - previous2.Values[fieldIndex]
+		value = value + 2*previous.values[fieldIndex] - previous2.values[fieldIndex]
 	case PredicatorAverage2:
 		if previous == nil {
 			break
 		}
-		value = value + (previous.Values[fieldIndex]+previous2.Values[fieldIndex])/2
+		value = value + (previous.values[fieldIndex]+previous2.values[fieldIndex])/2
 	case PredictorMinMotor:
 		value += int32(frameDef.Sysconfig.MotorOutputLow)
 	default:
