@@ -49,7 +49,7 @@ func TestParseFrameIRaw(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	res, err := ParseFrame(frameDef, frameDef.FieldsI, nil, nil, &dec, true, 0)
+	res, err := ParseFrame(frameDef, frameDef.FieldsI, nil, nil, dec, true, 0)
 	assert.Nil(t, err)
 	assert.Equal(t, decodedRawFrameI, res)
 }
@@ -60,7 +60,7 @@ func TestParseFrameIPredicted(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	res, err := ParseFrame(frameDef, frameDef.FieldsI, nil, nil, &dec, false, 0)
+	res, err := ParseFrame(frameDef, frameDef.FieldsI, nil, nil, dec, false, 0)
 
 	assert.Nil(t, err)
 	assert.Equal(t, decodedPredictedFrameI, res)
@@ -71,7 +71,7 @@ func TestParseFramePRaw(t *testing.T) {
 	dec := stream.NewDecoder(r)
 	frameDef := dummyFrameDefinition()
 
-	res, err := ParseFrame(frameDef, frameDef.FieldsP, nil, nil, &dec, true, 0)
+	res, err := ParseFrame(frameDef, frameDef.FieldsP, nil, nil, dec, true, 0)
 
 	assert.Nil(t, err)
 	assert.Equal(t, decodedRawFrameP, res)
@@ -82,7 +82,7 @@ func TestParseFramePPredicted(t *testing.T) {
 	dec := stream.NewDecoder(r)
 	frameDef := dummyFrameDefinition()
 
-	res, err := ParseFrame(frameDef, frameDef.FieldsI, nil, nil, &dec, false, 0)
+	res, err := ParseFrame(frameDef, frameDef.FieldsI, nil, nil, dec, false, 0)
 	assert.Nil(t, err)
 	assert.Equal(t, decodedPredictedFrameI, res)
 
@@ -95,7 +95,7 @@ func TestParseFramePPredicted(t *testing.T) {
 
 	for idx, decodedFrame := range decodedPredictedFramesP {
 		t.Run(fmt.Sprintf("for frame P%v", idx+1), func(t *testing.T) {
-			res, err := ParseFrame(frameDef, frameDef.FieldsP, previousFrame, previousPreviousFrame, &dec, false, 0)
+			res, err := ParseFrame(frameDef, frameDef.FieldsP, previousFrame, previousPreviousFrame, dec, false, 0)
 			assert.Nil(t, err)
 			assert.Equal(t, decodedFrame, res)
 
