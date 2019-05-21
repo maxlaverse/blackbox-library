@@ -20,7 +20,7 @@ const (
 // FrameReader reads and decodes data frame
 type FrameReader struct {
 	LoggingResumeLogIteration int32
-	LastEventType             LogEventType
+	LastEventType             *LogEventType
 	LastSkippedFrames         int32
 	LoggingResumeCurrentTime  int32
 	timeRolloverAccumulator   int32
@@ -45,14 +45,14 @@ type FrameReaderOptions struct {
 }
 
 // NewFrameReader returns a new FrameReader
-func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameReaderOptions) FrameReader {
+func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameReaderOptions) (*FrameReader, error) {
 	val, err := frameDef.GetHeaderValue("I interval")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	frameIntervalI, err := strconv.ParseInt(val, 10, 32)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	if frameIntervalI < 1 {
 		frameIntervalI = 1
@@ -76,7 +76,7 @@ func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameRead
 	if opts != nil {
 		frameReader.raw = opts.Raw
 	}
-	return frameReader
+	return &frameReader, nil
 }
 
 // ReadNextFrame reads the next frame
@@ -90,17 +90,16 @@ func (f *FrameReader) ReadNextFrame() (Frame, error) {
 	frameType := LogFrameType(command)
 
 	//Next byte should be readable if stream is valid
-	switch frameType {
+	switch command {
 	case LogFrameEvent:
-		err := f.parseEventFrame(f.dec)
+		eventType, eventValues, err := f.parseEventFrame(f.dec)
 		if err != nil {
 			return nil, err
 		}
 		end := f.dec.BytesRead()
-		// @TODO: parse event properly
-		frame := NewEventFrame(LogEventSyncBeep, nil, start, end)
-		f.PreComplete(frame)
-		return frame, nil
+		frame := NewEventFrame(*eventType, eventValues, start, end)
+		_, err = f.PreComplete(frame)
+		return frame, err
 
 	case LogFrameIntra:
 		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsI, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
@@ -109,8 +108,8 @@ func (f *FrameReader) ReadNextFrame() (Frame, error) {
 		}
 		end := f.dec.BytesRead()
 		frame := NewMainFrame(frameType, values, start, end)
-		f.PreComplete(frame)
-		return frame, nil
+		_, err = f.PreComplete(frame)
+		return frame, err
 
 	case LogFrameInter:
 		f.LastSkippedFrames = f.countIntentionallySkippedFrames()
@@ -120,8 +119,8 @@ func (f *FrameReader) ReadNextFrame() (Frame, error) {
 		}
 		end := f.dec.BytesRead()
 		frame := NewMainFrame(frameType, values, start, end)
-		f.PreComplete(frame)
-		return frame, nil
+		_, err = f.PreComplete(frame)
+		return frame, err
 
 	case LogFrameSlow:
 		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsS, nil, nil, f.dec, f.raw, 0)
@@ -130,8 +129,8 @@ func (f *FrameReader) ReadNextFrame() (Frame, error) {
 		}
 		end := f.dec.BytesRead()
 		frame := NewSlowFrame(values, start, end)
-		f.PreComplete(frame)
-		return frame, nil
+		_, err = f.PreComplete(frame)
+		return frame, err
 
 	default:
 		//TODO: If a P frame is corrupt here, we should optionally drop the previous one (As the original implementation does)
@@ -141,126 +140,134 @@ func (f *FrameReader) ReadNextFrame() (Frame, error) {
 	}
 }
 
-func (f *FrameReader) parseEventFrame(dec *stream.Decoder) error {
-	event, err := dec.ReadByte()
+func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (*LogEventType, eventValues, error) {
+	values := make(eventValues)
+	eventType, err := dec.ReadByte()
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	f.LastEventType = LogEventType(event)
+	f.LastEventType = &eventType
 
-	switch f.LastEventType {
+	switch eventType {
 	case LogEventSyncBeep:
 		beepTime, err := dec.ReadUnsignedVB()
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
-		fmt.Printf("Frame #X (E) ")
-		fmt.Printf("%s=%d ", "beepTime", beepTime)
-		fmt.Printf("\n")
+		values["beepTime"] = beepTime
+
 	case LogEventInflightAdjustment:
-		fmt.Printf("Event type is logEventInflightAdjustment\n")
-		panic("Not implemented: logEventInflightAdjustment")
+		return nil, nil, errors.New("Not implemented: logEventInflightAdjustment")
+
 	case LogEventLoggingResume:
 		val, err := dec.ReadUnsignedVB()
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		f.LoggingResumeLogIteration = int32(val)
 
 		val, err = dec.ReadUnsignedVB()
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		f.LoggingResumeCurrentTime = int32(val) + f.timeRolloverAccumulator
+		values["iteration"] = f.LoggingResumeLogIteration
+		values["currentTime"] = f.LoggingResumeCurrentTime
 
-		fmt.Printf("Frame #X (%s) ", "E")
-		fmt.Printf("%s=%d ", "iteration", f.LoggingResumeLogIteration)
-		fmt.Printf("%s=%d ", "currentTime", f.LoggingResumeCurrentTime)
-		fmt.Printf("\n")
 	case LogEventFlightMode:
-		fmt.Printf("Frame #X (%s) ", "E")
 		flags, err := dec.ReadUnsignedVB()
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
-		fmt.Printf("%s=%d ", "flags", flags)
-
 		lastFlags, err := dec.ReadUnsignedVB()
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
-		fmt.Printf("%s=%d ", "lastFlags", lastFlags)
-		fmt.Printf("\n")
-	case LogEventLogEnd:
+		values["flags"] = flags
+		values["lastFlags"] = lastFlags
 
+	case LogEventLogEnd:
 		val, err := dec.ReadBytes(12)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
-		fmt.Printf("Frame #X (%s) ", "E")
-		fmt.Printf("data=%s ", val)
-		fmt.Printf("\n")
+
 		reachedEndOfFile, err := dec.EOF()
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 		if !reachedEndOfFile {
-			return errors.New("There are additional data after the end of the file")
+			return nil, nil, errors.New("There are additional data after the end of the file")
 		}
 		f.Finished = true
+		values["data"] = val
+
 	default:
-		fmt.Printf("Event type is unknown - ignored: %v\n", event)
+		return nil, nil, errors.Errorf("Event type is unknown - ignored: %v\n", eventType)
 	}
-	return nil
+
+	return &eventType, values, nil
 }
 
 // PreComplete updates the reading state machine based on a frame
-func (f *FrameReader) PreComplete(frame Frame) bool {
+func (f *FrameReader) PreComplete(frame Frame) (frameAccepted bool, err error) {
 	f.Stats.TotalFrames++
-	if frame.Size() <= logEventMaxFrameLength {
-		frameAccepted := f.Complete(frame)
-		if frameAccepted {
-			d := f.Stats.Frame[frame.Type()]
-			d.Bytes += int64(frame.Size())
-			d.ValidCount++
-			if d.SizeCount == nil {
-				d.SizeCount = map[int]int{}
-			}
-			d.SizeCount[frame.Size()]++
-			f.Stats.Frame[frame.Type()] = d
-			return true
-		}
 
-		d := f.Stats.Frame[frame.Type()]
-		d.DesyncCount++
-		f.Stats.Frame[frame.Type()] = d
-		return false
-
+	if frame.Size() > logEventMaxFrameLength {
+		f.countFrameAsCorrupted(frame)
+		return false, errors.Errorf(
+			"FrameReader: previous frame was corrupt, main stream is not valid anymore, frame size %d is bigger than expected %d",
+			frame.Size(),
+			logEventMaxFrameLength,
+		)
 	}
 
-	fmt.Printf("The previous frame was corrupt - Main stream is not valid anymore\n")
+	frameAccepted, err = f.Complete(frame)
+	if err != nil {
+		f.countFrameAsCorrupted(frame)
+		return frameAccepted, err
+	}
+
+	if frameAccepted {
+		d := f.Stats.Frame[frame.Type()]
+		d.Bytes += int64(frame.Size())
+		d.ValidCount++
+		if d.SizeCount == nil {
+			d.SizeCount = map[int]int{}
+		}
+		d.SizeCount[frame.Size()]++
+		f.Stats.Frame[frame.Type()] = d
+	}
+
+	d := f.Stats.Frame[frame.Type()]
+	d.DesyncCount++
+	f.Stats.Frame[frame.Type()] = d
+
+	return frameAccepted, nil
+}
+
+// Complete acknowledge and saves a frame
+func (f *FrameReader) Complete(frame Frame) (bool, error) {
+	switch frame.Type() {
+	case LogFrameIntra:
+		return f.completeFrameIntra(frame.(*MainFrame)), nil
+	case LogFrameInter:
+		return f.completeFrameInter(frame.(*MainFrame)), nil
+	case LogFrameSlow:
+		return f.completeSlowFrame(frame.(*SlowFrame)), nil
+	case LogFrameEvent:
+		return f.completeEventFrame(), nil
+	default:
+		return false, errors.Errorf("Unable to complete frame. Unsupported type '%s'.", string(frame.Type()))
+	}
+}
+
+func (f *FrameReader) countFrameAsCorrupted(frame Frame) {
 	f.MainStreamIsValid = false
 	d := f.Stats.Frame[frame.Type()]
 	d.CorruptCount++
 	f.Stats.Frame[frame.Type()] = d
 	f.Stats.TotalCorruptedFrames++
-	panic(frame.Size())
-}
-
-// Complete aknowledge and saves a frame
-func (f *FrameReader) Complete(frame Frame) bool {
-	switch frame.Type() {
-	case LogFrameIntra:
-		return f.completeFrameIntra(frame.(*MainFrame))
-	case LogFrameInter:
-		return f.completeFrameInter(frame.(*MainFrame))
-	case LogFrameSlow:
-		return f.completeSlowFrame(frame.(*SlowFrame))
-	case LogFrameEvent:
-		return f.completeEventFrame()
-	default:
-		panic(fmt.Sprintf("Unable to complete '%s'", frame.Type()))
-	}
 }
 
 func (f *FrameReader) completeFrameIntra(frame *MainFrame) bool {
@@ -315,8 +322,8 @@ func (f *FrameReader) completeSlowFrame(frame *SlowFrame) bool {
 }
 
 func (f *FrameReader) completeEventFrame() bool {
-	if f.LastEventType != -1 {
-		if f.LastEventType == LogEventLoggingResume {
+	if f.LastEventType != nil {
+		if *f.LastEventType == LogEventLoggingResume {
 			f.LastMainFrameIteration = f.LoggingResumeLogIteration
 			f.LastMainFrameTime = f.LoggingResumeCurrentTime
 		}
@@ -400,7 +407,7 @@ func (f *FrameReader) PrintStatistics() {
 	fmt.Println("Statistics")
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', tabwriter.AlignRight)
 	for t, f := range f.Stats.Frame {
-		fmt.Fprintf(w, "%s frames\t %d valid\t %d desync\t %d bytes\t %d corrupt\t %d sizes\t\n", t, f.ValidCount, f.DesyncCount, f.Bytes, f.CorruptCount, len(f.SizeCount))
+		fmt.Fprintf(w, "%s frames\t %d valid\t %d desync\t %d bytes\t %d corrupt\t %d sizes\t\n", string(t), f.ValidCount, f.DesyncCount, f.Bytes, f.CorruptCount, len(f.SizeCount))
 	}
 	w.Flush()
 }

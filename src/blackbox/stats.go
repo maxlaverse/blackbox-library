@@ -8,7 +8,7 @@ type StatsType struct {
 	Frame                         map[LogFrameType]StatsFrameType
 }
 
-// StatsFrameType represents stats for one type of freame
+// StatsFrameType represents stats for one type of frame
 type StatsFrameType struct {
 	ValidCount   int
 	Bytes        int64

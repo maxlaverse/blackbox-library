@@ -15,10 +15,11 @@ func TestReadFrameI(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, NewMainFrame(LogFrameIntra, decodedPredictedFrameI, 0, 51), frame)
 }
 
@@ -28,10 +29,11 @@ func TestReadFrameS(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, NewSlowFrame([]int32{}, 0, 1), frame)
 }
 
@@ -41,13 +43,23 @@ func TestReadFrameEventLoggingResume(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
-	assert.Nil(t, err)
-	assert.Equal(t, NewEventFrame(LogEventSyncBeep, nil, 0, 9), frame)
-	assert.Equal(t, int32(55158008), frameReader.LoggingResumeCurrentTime)
-	assert.Equal(t, int32(52992), frameReader.LoggingResumeLogIteration)
+	assert.NoError(t, err)
+
+	expectedTime := int32(55158008)
+	expectedIteration := int32(52992)
+	expectedFrameValues := eventValues{
+		"currentTime": expectedTime,
+		"iteration":   expectedIteration,
+	}
+	expectedFrame := NewEventFrame(LogEventLoggingResume, expectedFrameValues, 0, 9)
+
+	assert.Equal(t, expectedFrame, frame)
+	assert.Equal(t, expectedTime, frameReader.LoggingResumeCurrentTime)
+	assert.Equal(t, expectedIteration, frameReader.LoggingResumeLogIteration)
 }
 
 func TestReadFrameEventSyncBeep(t *testing.T) {
@@ -56,11 +68,17 @@ func TestReadFrameEventSyncBeep(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
-	assert.Nil(t, err)
-	assert.Equal(t, NewEventFrame(LogEventSyncBeep, nil, 0, 6), frame)
+	assert.NoError(t, err)
+
+	expectedFrameValues := eventValues{
+		"beepTime": uint32(41780625),
+	}
+	expectedFrame := NewEventFrame(LogEventSyncBeep, expectedFrameValues, 0, 6)
+	assert.Equal(t, expectedFrame, frame)
 }
 
 func TestReadFrameEventLogEnd(t *testing.T) {
@@ -69,11 +87,17 @@ func TestReadFrameEventLogEnd(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	assert.NoError(t, err)
 
 	frame, err := frameReader.ReadNextFrame()
-	assert.Nil(t, err)
-	assert.Equal(t, NewEventFrame(LogEventSyncBeep, nil, 0, 12), frame)
+	assert.NoError(t, err)
+
+	expectedFrameValues := eventValues{
+		"data": []byte{69, 110, 100, 32, 111, 102, 32, 108, 111, 103, 0, 0},
+	}
+	expectedFrame := NewEventFrame(LogEventLogEnd, expectedFrameValues, 0, 12)
+	assert.Equal(t, expectedFrame, frame)
 	assert.Equal(t, true, frameReader.Finished)
 }
 
@@ -83,9 +107,10 @@ func TestReadFrameEventLogEndCorrupt(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	assert.NoError(t, err)
 
-	_, err := frameReader.ReadNextFrame()
+	_, err = frameReader.ReadNextFrame()
 	assert.EqualError(t, err, "There are additional data after the end of the file")
 }
 
@@ -95,7 +120,8 @@ func TestReadStream(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	assert.NoError(t, err)
 
 	decodedFrames := []Frame{
 		NewMainFrame(LogFrameIntra, decodedPredictedFrameI, 0, 51),
@@ -110,7 +136,7 @@ func TestReadStream(t *testing.T) {
 	for idx, decodedFrame := range decodedFrames {
 		t.Run(fmt.Sprintf("for frame P%v", idx+1), func(t *testing.T) {
 			frame, err := frameReader.ReadNextFrame()
-			assert.Nil(t, err)
+			assert.NoError(t, err)
 			assert.Equal(t, decodedFrame, frame)
 		})
 	}
@@ -122,7 +148,8 @@ func TestReadBrokenFrame(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	frameReader := NewFrameReader(&dec, frameDef, nil)
+	frameReader, err := NewFrameReader(&dec, frameDef, nil)
+	assert.NoError(t, err)
 
 	decodedFrames := []Frame{
 		NewMainFrame(LogFrameIntra, decodedPredictedFrameI, 0, 51),
@@ -138,8 +165,8 @@ func TestReadBrokenFrame(t *testing.T) {
 		})
 	}
 
-	_, err := frameReader.ReadNextFrame()
-	assert.Nil(t, err)
+	_, err = frameReader.ReadNextFrame()
+	assert.NoError(t, err)
 
 	_, err = frameReader.ReadNextFrame()
 	assert.EqualError(t, err, "Frame type '\v' (b'1011') is not supported")

@@ -4,19 +4,30 @@ import (
 	"github.com/pkg/errors"
 )
 
-type LogFrameType string
+type LogFrameType = byte
 
 const (
 	// See https://cleanflight.readthedocs.io/en/stable/development/Blackbox%20Internals/
-	LogFrameEvent LogFrameType = "E"
-	LogFrameIntra              = "I"
-	LogFrameInter              = "P"
-	LogFrameSlow               = "S"
+	LogFrameEvent  LogFrameType = 69 // E
+	LogFrameIntra               = 73 // I
+	LogFrameInter               = 80 // P
+	LogFrameSlow                = 83 // S
+	LogFrameHeader              = 72 // H
+	LogFrameGPS                 = 71 // G
 )
+
+var LogFrameAllTypes = []byte{
+	LogFrameEvent,
+	LogFrameIntra,
+	LogFrameInter,
+	LogFrameSlow,
+	LogFrameHeader,
+	LogFrameGPS,
+}
 
 // -------------------------------------------------------------------------- //
 
-type LogEventType int32
+type LogEventType = byte
 
 const (
 	LogEventSyncBeep           LogEventType = 0

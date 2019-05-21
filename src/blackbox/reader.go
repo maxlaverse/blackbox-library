@@ -2,7 +2,8 @@ package blackbox
 
 import (
 	"bufio"
-	"fmt"
+	"bytes"
+	"github.com/pkg/errors"
 	"io"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
@@ -49,37 +50,47 @@ func (f *FlightLogReader) LoadFile(file io.Reader) error {
 		Raw: false,
 	}
 
-	frameReader := NewFrameReader(&decoder, frameDefinition, opts)
+	frameReader, err := NewFrameReader(&decoder, frameDefinition, opts)
+	if err != nil {
+		return err
+	}
+
 	for !frameReader.Finished {
 		frame, err := frameReader.ReadNextFrame()
-		if err != nil {
-			fmt.Printf("Frame was discarded: %v\n", err)
-			consumeToNext(decoder)
+		if err == nil {
+			f.Frames = append(f.Frames, frame)
 			continue
 		}
 
-		f.Frames = append(f.Frames, frame)
+		// @TODO: consume skippedFrames
+		_, err = consumeToNext(decoder)
+		if err != nil {
+			return err
+		}
 	}
 
 	frameReader.PrintStatistics()
 	return nil
 }
 
-func consumeToNext(enc stream.Decoder) int64 {
-	defer fmt.Printf("\n")
-	intialPos := enc.BytesRead()
+func consumeToNext(enc stream.Decoder) (skippedFrames int64, err error) {
+	initialPos := enc.BytesRead()
 	for i := 0; i < 256; i++ {
 		b, err := enc.NextByte()
 		if err != nil {
-			panic(err)
+			return 0, err
 		}
 
-		fmt.Printf("%d:%v, ", i, string(b))
-		if string(b) == "S" || string(b) == "H" || string(b) == "E" || string(b) == "I" || string(b) == "P" || string(b) == "G" {
+		if bytes.IndexByte(LogFrameAllTypes, b) != -1 {
 			newPos := enc.BytesRead()
-			return newPos - intialPos
+			return newPos - initialPos, nil
 		}
-		enc.ReadByte()
+
+		_, err = enc.ReadByte()
+		if err != nil {
+			return 0, err
+		}
 	}
-	panic("Could not find next frame")
+
+	return 0, errors.New("FlightLogReader: could not find next frame")
 }
