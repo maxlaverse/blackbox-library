@@ -1,8 +1,8 @@
 package exporter
 
 import (
-	"bufio"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
@@ -49,13 +49,13 @@ var fieldUnits = map[string]string{
 }
 
 type CsvFrameExporter struct {
-	target             *bufio.Writer
+	target             io.Writer
 	lastSlow           *blackbox.SlowFrame
 	NumberOfFramesRead int
 	debugMode          bool
 }
 
-func NewCsvFrameExporter(file *bufio.Writer, debugMode bool) *CsvFrameExporter {
+func NewCsvFrameExporter(file io.Writer, debugMode bool) *CsvFrameExporter {
 	return &CsvFrameExporter{
 		target:    file,
 		lastSlow:  blackbox.NewSlowFrame([]int32{0, 0, 0, 0, 0}, 0, 0),
@@ -72,7 +72,7 @@ func (e *CsvFrameExporter) WriteHeaders(def blackbox.LogDefinition) error {
 		headers = append(headers, unitForField(f.Name))
 	}
 
-	_, err := e.target.WriteString(strings.Join(headers, ", "))
+	_, err := e.target.Write([]byte(strings.Join(headers, ", ")))
 	if err != nil {
 		return errors.Wrap(err, "could not write headers to the target file")
 	}
@@ -95,7 +95,7 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 		sort.Strings(values)
 
 		//TODO: Output the event type
-		_, err := e.target.WriteString(fmt.Sprintf("E frame: %s", strings.Join(values, ", ")))
+		_, err := e.target.Write([]byte(fmt.Sprintf("E frame: %s", strings.Join(values, ", "))))
 		if err != nil {
 			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))
 		}
@@ -111,7 +111,7 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 		for k, v := range e.lastSlow.Values().([]int32) {
 			values = append(values, flagStringValue(k, v))
 		}
-		_, err := e.target.WriteString(fmt.Sprintf("S frame: %s", strings.Join(values, ", ")))
+		_, err := e.target.Write([]byte(fmt.Sprintf("S frame: %s", strings.Join(values, ", "))))
 		if err != nil {
 			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))
 		}
@@ -138,7 +138,7 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 		for k, v := range e.lastSlow.Values().([]int32) {
 			values = append(values, flagStringValue(k, v))
 		}
-		_, err := e.target.WriteString(strings.Join(values, ", "))
+		_, err := e.target.Write([]byte(strings.Join(values, ", ")))
 		if err != nil {
 			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))
 		}
@@ -147,7 +147,7 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 }
 
 func (e *CsvFrameExporter) writeNewLine() error {
-	_, err := e.target.WriteString("\n")
+	_, err := e.target.Write([]byte("\n"))
 	return errors.Wrap(err, "could not write to the target file")
 }
 

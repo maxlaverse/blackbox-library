@@ -1,7 +1,6 @@
 package exporter
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -14,8 +13,7 @@ import (
 
 func TestCsvHeaders(t *testing.T) {
 	var csvBuffer bytes.Buffer
-	csvWriter := bufio.NewWriter(&csvBuffer)
-	csvExporter := NewCsvFrameExporter(csvWriter, true)
+	csvExporter := NewCsvFrameExporter(&csvBuffer, true)
 
 	flightLog, frameChan, errChan, logFile := readFixture(t, "normal.bfl", blackbox.FlightLogReaderOpts{Raw: true})
 	defer logFile.Close()
@@ -27,7 +25,6 @@ func TestCsvHeaders(t *testing.T) {
 	case err := <-errChan:
 		assert.NoError(t, err)
 	}
-	csvWriter.Flush()
 
 	assert.Equal(t, "loopIteration, time (us), axisP[0], axisP[1], axisP[2], axisI[0], axisI[1], axisI[2], axisD[0], axisD[1], axisF[0], axisF[1], axisF[2], rcCommand[0], rcCommand[1], rcCommand[2], rcCommand[3], setpoint[0], setpoint[1], setpoint[2], setpoint[3], vbatLatest (V), amperageLatest (A), rssi, gyroADC[0], gyroADC[1], gyroADC[2], accSmooth[0], accSmooth[1], accSmooth[2], debug[0], debug[1], debug[2], debug[3], motor[0], motor[1], motor[2], motor[3], flightModeFlags (flags), stateFlags (flags), failsafePhase (flags), rxSignalReceived, rxFlightChannelsValid\n", csvBuffer.String())
 }
@@ -47,8 +44,7 @@ func TestRawValues(t *testing.T) {
 	}
 
 	var csvBuffer bytes.Buffer
-	csvWriter := bufio.NewWriter(&csvBuffer)
-	csvExporter := NewCsvFrameExporter(csvWriter, true)
+	csvExporter := NewCsvFrameExporter(&csvBuffer, true)
 
 	_, frameChan, errChan, logFile := readFixture(t, "normal.bfl", blackbox.FlightLogReaderOpts{Raw: true})
 	defer logFile.Close()
@@ -61,7 +57,6 @@ func TestRawValues(t *testing.T) {
 			case err := <-errChan:
 				assert.NoError(t, err)
 			}
-			csvWriter.Flush()
 			assert.Equal(t, line, csvBuffer.String())
 		})
 		csvBuffer.Reset()
@@ -83,8 +78,7 @@ func TestNormalValues(t *testing.T) {
 	}
 
 	var csvBuffer bytes.Buffer
-	csvWriter := bufio.NewWriter(&csvBuffer)
-	csvExporter := NewCsvFrameExporter(csvWriter, true)
+	csvExporter := NewCsvFrameExporter(&csvBuffer, true)
 
 	_, frameChan, errChan, logFile := readFixture(t, "normal.bfl", blackbox.FlightLogReaderOpts{Raw: false})
 	defer logFile.Close()
@@ -97,7 +91,6 @@ func TestNormalValues(t *testing.T) {
 			case err := <-errChan:
 				assert.NoError(t, err)
 			}
-			csvWriter.Flush()
 			assert.Equal(t, line, csvBuffer.String())
 		})
 		csvBuffer.Reset()
