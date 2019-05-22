@@ -54,6 +54,7 @@ func TestReadFrameEventLoggingResume(t *testing.T) {
 	expectedFrameValues := eventValues{
 		"currentTime": expectedTime,
 		"iteration":   expectedIteration,
+		"name":        "Logging resume",
 	}
 	expectedFrame := NewEventFrame(LogEventLoggingResume, expectedFrameValues, 0, 9)
 
@@ -76,6 +77,7 @@ func TestReadFrameEventSyncBeep(t *testing.T) {
 
 	expectedFrameValues := eventValues{
 		"beepTime": uint32(41780625),
+		"name":     "Sync beep",
 	}
 	expectedFrame := NewEventFrame(LogEventSyncBeep, expectedFrameValues, 0, 6)
 	assert.Equal(t, expectedFrame, frame)
@@ -95,6 +97,7 @@ func TestReadFrameEventLogEnd(t *testing.T) {
 
 	expectedFrameValues := eventValues{
 		"data": []byte{69, 110, 100, 32, 111, 102, 32, 108, 111, 103, 0, 0},
+		"name": "Log clean end",
 	}
 	expectedFrame := NewEventFrame(LogEventLogEnd, expectedFrameValues, 0, 12)
 	assert.Equal(t, expectedFrame, frame)

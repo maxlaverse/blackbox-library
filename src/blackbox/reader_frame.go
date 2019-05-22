@@ -155,6 +155,7 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventV
 		if err != nil {
 			return 0, nil, err
 		}
+		values["name"] = "Sync beep"
 		values["beepTime"] = beepTime
 
 	case LogEventInflightAdjustment:
@@ -172,6 +173,7 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventV
 			return 0, nil, err
 		}
 		f.LoggingResumeCurrentTime = int32(val) + f.timeRolloverAccumulator
+		values["name"] = "Logging resume"
 		values["iteration"] = f.LoggingResumeLogIteration
 		values["currentTime"] = f.LoggingResumeCurrentTime
 
@@ -184,6 +186,7 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventV
 		if err != nil {
 			return 0, nil, err
 		}
+		values["name"] = "Flight mode"
 		values["flags"] = flags
 		values["lastFlags"] = lastFlags
 
@@ -201,6 +204,7 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventV
 			return 0, nil, errors.New("There are additional data after the end of the file")
 		}
 		f.Finished = true
+		values["name"] = "Log clean end"
 		values["data"] = val
 
 	default:
