@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"sort"
 	"strings"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox"
@@ -14,34 +13,6 @@ import (
 const (
 	adcVref = 33.0
 )
-
-var flightModeNames = map[int32]string{
-	1:   "ANGLE_MODE",
-	2:   "HORIZON_MODE",
-	4:   "MAG",
-	8:   "BARO",
-	16:  "GPS_HOME",
-	32:  "GPS_HOLD",
-	64:  "HEADFREE",
-	128: "AUTOTUNE",
-	256: "PASSTHRU",
-	512: "SONAR",
-}
-
-var flightStateNames = map[int32]string{
-	1:  "GPS_FIX_HOME",
-	2:  "GPS_FIX",
-	4:  "CALIBRATE_MAG",
-	8:  "SMALL_ANGLE",
-	16: "FIXED_WING",
-}
-
-var failsafePhaseNames = []string{
-	"IDLE",
-	"RX_LOSS_DETECTED",
-	"LANDING",
-	"LANDED",
-}
 
 var fieldUnits = map[blackbox.FieldName]string{
 	blackbox.FieldTime:             "us",
@@ -95,14 +66,7 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 			return nil
 		}
 
-		var values []string
-		for k, v := range frame.Values().(map[string]interface{}) {
-			values = append(values, fmt.Sprintf("%s: %d", k, v))
-		}
-		sort.Strings(values)
-
-		//TODO: Output the event type
-		_, err := e.target.Write([]byte(fmt.Sprintf("E frame: %s", strings.Join(values, ", "))))
+		_, err := e.target.Write([]byte(frame.(*blackbox.EventFrame).String()))
 		if err != nil {
 			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))
 		}
@@ -114,11 +78,7 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 			return nil
 		}
 
-		var values []string
-		for k, v := range e.lastSlow.Values().([]int32) {
-			values = append(values, flagStringValue(k, v))
-		}
-		_, err := e.target.Write([]byte(fmt.Sprintf("S frame: %s", strings.Join(values, ", "))))
+		_, err := e.target.Write([]byte(frame.(*blackbox.SlowFrame).String()))
 		if err != nil {
 			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))
 		}
@@ -140,8 +100,8 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 			}
 			values = append(values, prependSpaceForField(k, fmt.Sprintf("%d", v)))
 		}
-		for k, v := range e.lastSlow.Values().([]int32) {
-			values = append(values, flagStringValue(k, v))
+		for _, v := range e.lastSlow.StringValues() {
+			values = append(values, v)
 		}
 		_, err := e.target.Write([]byte(strings.Join(values, ", ")))
 		if err != nil {
@@ -184,37 +144,4 @@ func prependSpaceForField(index int, name string) string {
 	default:
 		return prependField(3, name)
 	}
-}
-
-func flagStringValue(fieldIndex int, value int32) string {
-	switch fieldIndex {
-	case 0:
-		return decodeFlagsToString(flightModeNames, value)
-	case 1:
-		return decodeFlagsToString(flightStateNames, value)
-	case 2:
-		return decodeEnumToString(failsafePhaseNames, value)
-	default:
-		return fmt.Sprintf("%d", value)
-	}
-}
-
-func decodeFlagsToString(flags map[int32]string, flagValue int32) string {
-	flagsAsStrings := []string{}
-	for k, v := range flags {
-		if flagValue&k == k {
-			flagsAsStrings = append(flagsAsStrings, v)
-		}
-	}
-	if len(flagsAsStrings) == 0 {
-		return "0"
-	}
-	return strings.Join(flagsAsStrings, "|")
-}
-
-func decodeEnumToString(enum []string, value int32) string {
-	if int(value) >= len(enum) {
-		return fmt.Sprintf("%d", value)
-	}
-	return enum[value]
 }
