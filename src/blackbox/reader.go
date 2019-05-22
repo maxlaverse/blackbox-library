@@ -4,10 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"github.com/pkg/errors"
 	"io"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -36,14 +36,13 @@ func NewFlightLogReader(opts FlightLogReaderOpts) *FlightLogReader {
 // LoadFile reads flight logs from a file.
 // Accepts context and stops processing when the context is canceled.
 // Returns channel with successfully parsed frames and channel with errors.
-func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan Frame, <-chan error) {
+func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan Frame, <-chan error, error) {
 	frameChan := make(chan Frame)
 	errChan := make(chan error)
 
 	frameReader, decoder, err := f.initFrameReader(file)
 	if err != nil {
-		go func() { errChan <- err }()
-		return frameChan, errChan
+		return nil, nil, err
 	}
 
 	go func() {
@@ -66,22 +65,22 @@ func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan 
 			}
 
 			frame, err := frameReader.ReadNextFrame()
-			if err == nil {
-				frameChan <- frame
+			if err != nil {
+				// the frame is corrupted
+				errChan <- err
+				// we should skip all bytes until the next frame
+				_, err = consumeToNext(decoder) // @TODO: consume skippedFrames value if needed
+				if err != nil {
+					errChan <- err
+				}
 				continue
 			}
 
-			// the frame is corrupted
-			errChan <- err
-			// we should skip all bytes until the next frame
-			_, err = consumeToNext(decoder) // @TODO: consume skippedFrames value if needed
-			if err != nil {
-				errChan <- err
-			}
+			frameChan <- frame
 		}
 	}()
 
-	return frameChan, errChan
+	return frameChan, errChan, nil
 }
 
 func (f *FlightLogReader) initFrameReader(file io.Reader) (*FrameReader, *stream.Decoder, error) {

@@ -55,7 +55,7 @@ func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, pre
 	case Predictor1500:
 		value += 1500
 	case PredictorMotor0:
-		motor0idx, err := frameDef.GetFieldIndex("motor[0]")
+		motor0idx, err := frameDef.GetFieldIndex(FieldMotor0)
 		if err != nil {
 			return value, err
 		}

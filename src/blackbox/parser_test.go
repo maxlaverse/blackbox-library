@@ -441,7 +441,7 @@ func dummyFrameDefinition() LogDefinition {
 		}
 	}
 
-	frameDef.FieldIRL = map[string]int{}
+	frameDef.FieldIRL = map[FieldName]int{}
 	for i, field := range frameDef.FieldsI {
 		frameDef.FieldIRL[field.Name] = i
 	}

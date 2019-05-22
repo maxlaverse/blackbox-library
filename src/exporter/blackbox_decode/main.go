@@ -72,25 +72,31 @@ func export(sourceFilepath string, opts cmdOptions) error {
 	defer csvFile.Close()
 	bufferedWriter := bufio.NewWriter(csvFile)
 
-	// prepare exporter
-	csvExporter := exporter.NewCsvFrameExporter(bufferedWriter, opts.debug)
-
 	// iterate over frames and write them to CSV
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
-	frameChan, errChan := flightLog.LoadFile(logFile, ctx)
-
-	// when the file is loaded, we should be able to get
-	// CSV headers based the initialized frameDef
-	err = csvExporter.WriteHeaders(flightLog.FrameDef)
+	frameChan, errChan, err := flightLog.LoadFile(logFile, ctx)
 	if err != nil {
 		return err
 	}
 
+	// prepare exporter and write CSV headers
+	csvExporter := exporter.NewCsvFrameExporter(bufferedWriter, opts.debug, flightLog.FrameDef)
+
+	headersSent := false
 	for {
 		select {
 		// read frames and write to CSV
 		case frame := <-frameChan:
+			// write headers before first row
+			if !headersSent {
+				err = csvExporter.WriteHeaders()
+				headersSent = true
+			}
+			if err != nil {
+				return err
+			}
+
 			// write CSV row
 			err = csvExporter.WriteFrame(frame)
 			if err != nil {
