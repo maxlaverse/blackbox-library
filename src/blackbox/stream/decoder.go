@@ -48,8 +48,10 @@ func (d *Decoder) ReadByte() (byte, error) {
 func (d *Decoder) ReadBytes(number int) ([]byte, error) {
 	bytes := make([]byte, number)
 	n, err := d.reader.Read(bytes)
-	if err != nil {
-		return nil, errorWithStack(err)
+	if err == io.EOF {
+		return nil, err
+	} else if err != nil {
+		return nil, ReadError{err}
 	}
 	d.statBytesRead += int64(n)
 	return bytes, nil
@@ -58,8 +60,10 @@ func (d *Decoder) ReadBytes(number int) ([]byte, error) {
 // NextByte returns the next byte without changing the file pointer
 func (d *Decoder) NextByte() (byte, error) {
 	bytes, err := d.reader.Peek(1)
-	if err != nil {
-		return 0, errorWithStack(err)
+	if err == io.EOF {
+		return 0, err
+	} else if err != nil {
+		return 0, ReadError{err}
 	}
 	return bytes[0], nil
 }

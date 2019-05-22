@@ -1,28 +1,75 @@
 package blackbox
 
+import "github.com/maxlaverse/blackbox-library/src/blackbox/stream"
+
 // See https://cleanflight.readthedocs.io/en/stable/development/Blackbox%20Internals/
 
 type Frame interface {
 	Type() LogFrameType
 	Values() interface{}
+	Sized
+	ErroredFrame
+}
+
+type Sized interface {
 	Size() int
+}
+
+type ErroredFrame interface {
+	// IsRead tells if there weren't errors while reading the frame from data source
+	IsRead() bool
+	// IsValid tells if there weren't errors while parsing the read data for this frame
+	IsValid() bool
+	// Errors returns all errors which happened while reading and parsing data for this frame
+	Errors() []error
+	// addError adds an error to the frame. If error is nil then does nothing
+	addError(err error)
 }
 
 // -------------------------------------------------------------------------- //
 
 type baseFrame struct {
-	frameType LogFrameType
-	start     int64
-	end       int64
+	frameType  LogFrameType
+	values     interface{}
+	errors     []error
+	isMissRead bool
+	start      int64
+	end        int64
 }
 
 func (f baseFrame) Type() LogFrameType {
 	return f.frameType
 }
 
+func (f baseFrame) Values() interface{} {
+	return f.values
+}
+
 // Size returns the size in bytes of a Frame
 func (f baseFrame) Size() int {
 	return int(f.end - f.start)
+}
+
+func (f baseFrame) Errors() []error {
+	return f.errors
+}
+
+func (f baseFrame) IsRead() bool {
+	return !f.isMissRead
+}
+
+func (f baseFrame) IsValid() bool {
+	return len(f.errors) == 0
+}
+
+func (f *baseFrame) addError(err error) {
+	if err == nil {
+		return
+	}
+	if _, ok := err.(stream.ReadError); ok {
+		f.isMissRead = true
+	}
+	f.errors = append(f.errors, err)
 }
 
 // -------------------------------------------------------------------------- //

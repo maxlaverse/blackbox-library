@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path"
 	"strconv"
@@ -75,41 +76,39 @@ func export(sourceFilepath string, opts cmdOptions) error {
 	// iterate over frames and write them to CSV
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
-	frameChan, errChan, err := flightLog.LoadFile(logFile, ctx)
+	frameChan, err := flightLog.LoadFile(logFile, ctx)
 	if err != nil {
 		return err
 	}
 
 	// prepare exporter and write CSV headers
 	csvExporter := exporter.NewCsvFrameExporter(bufferedWriter, opts.debug, flightLog.FrameDef)
+	err = csvExporter.WriteHeaders()
+	if err != nil {
+		return err
+	}
 
-	headersSent := false
-	for {
-		select {
-		// read frames and write to CSV
-		case frame := <-frameChan:
-			// write headers before first row
-			if !headersSent {
-				err = csvExporter.WriteHeaders()
-				headersSent = true
-			}
-			if err != nil {
-				return err
-			}
+	for frame := range frameChan {
+		// stop if we could not properly read a frame
+		if !frame.IsRead() {
+			cancel()
+			return frame.Errors()[0]
+		}
 
-			// write CSV row
-			err = csvExporter.WriteFrame(frame)
-			if err != nil {
-				cancel()
-				return err
+		// log but continue if we read the frame by it has some invalid data
+		if !frame.IsValid() {
+			for _, err := range frame.Errors() {
+				log.Printf("%+v", err)
 			}
+		}
 
-		// read errors
-		case err := <-errChan:
+		// write CSV row
+		err = csvExporter.WriteFrame(frame)
+		if err != nil {
 			cancel()
 			return err
-
-		default:
 		}
 	}
+
+	return nil
 }

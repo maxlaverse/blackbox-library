@@ -36,19 +36,16 @@ func NewFlightLogReader(opts FlightLogReaderOpts) *FlightLogReader {
 // LoadFile reads flight logs from a file.
 // Accepts context and stops processing when the context is canceled.
 // Returns channel with successfully parsed frames and channel with errors.
-func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan Frame, <-chan error, error) {
-	frameChan := make(chan Frame)
-	errChan := make(chan error)
-
+func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan Frame, error) {
 	frameReader, decoder, err := f.initFrameReader(file)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
+	frameChan := make(chan Frame)
 	go func() {
 		defer func() {
 			close(frameChan)
-			close(errChan)
 		}()
 
 		// collect stats when the process is done
@@ -64,23 +61,27 @@ func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan 
 			default:
 			}
 
-			frame, err := frameReader.ReadNextFrame()
-			if err != nil {
-				// the frame is corrupted
-				errChan <- err
-				// we should skip all bytes until the next frame
+			frame := frameReader.ReadNextFrame()
+			// if the frame is corrupted - we should skip all bytes until the next frame
+			if !frame.IsValid() {
 				_, err = consumeToNext(decoder) // @TODO: consume skippedFrames value if needed
-				if err != nil {
-					errChan <- err
-				}
-				continue
+			}
+			if err != nil {
+				frame.addError(err)
 			}
 
+			// finally send the frame out
 			frameChan <- frame
+
+			// if there were any previous non-frame errors - stop immediately
+			if err != nil {
+				return
+			}
 		}
+		err = nil
 	}()
 
-	return frameChan, errChan, nil
+	return frameChan, nil
 }
 
 func (f *FlightLogReader) initFrameReader(file io.Reader) (*FrameReader, *stream.Decoder, error) {
