@@ -62,23 +62,19 @@ func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan 
 			}
 
 			frame := frameReader.ReadNextFrame()
-			// if the frame is corrupted - we should skip all bytes until the next frame
+
 			if frame.Error() != nil {
-				_, err = consumeToNext(decoder) // @TODO: consume skippedFrames value if needed
-			}
-			if err != nil {
-				frame.setError(err)
+				// Try to consume the remaining bytes from the broken frame
+				if _, err = consumeToNext(decoder); err != nil {
+					frame.setError(err)
+					frameChan <- frame
+					return
+				}
 			}
 
 			// finally send the frame out
 			frameChan <- frame
-
-			// if there were any previous non-frame errors - stop immediately
-			if err != nil {
-				return
-			}
 		}
-		err = nil
 	}()
 
 	return frameChan, nil
