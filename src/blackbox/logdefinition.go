@@ -54,12 +54,12 @@ type LogDefinition struct {
 	FieldsP          []FieldDefinition
 	Headers          []Header
 	Sysconfig        SysconfigType
-	FieldIRL         map[string]int
+	FieldIRL         map[FieldName]int
 }
 
 // FieldDefinition represents a field
 type FieldDefinition struct {
-	Name       string
+	Name       FieldName
 	Signed     bool
 	Predictor  int64
 	Encoding   int64
@@ -110,12 +110,12 @@ func NewSysconfig() SysconfigType {
 
 // Header represents a header value
 type Header struct {
-	Name  string
+	Name  HeaderName
 	Value string
 }
 
 // GetHeaderValue returns the value of a header
-func (f *LogDefinition) GetHeaderValue(headerName string) (string, error) {
+func (f *LogDefinition) GetHeaderValue(headerName HeaderName) (string, error) {
 	for _, v := range f.Headers {
 		if v.Name == headerName {
 			return v.Value, nil
@@ -125,7 +125,7 @@ func (f *LogDefinition) GetHeaderValue(headerName string) (string, error) {
 }
 
 // GetFieldIndex returns the position of a field
-func (f *LogDefinition) GetFieldIndex(fieldName string) (int, error) {
+func (f *LogDefinition) GetFieldIndex(fieldName FieldName) (int, error) {
 	index, ok := f.FieldIRL[fieldName]
 	if !ok {
 		return 0, errors.Errorf("Field definition for '%s' not found: %v", fieldName, f.FieldIRL)

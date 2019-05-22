@@ -3,11 +3,16 @@ package exporter
 import (
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strings"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox"
 	"github.com/pkg/errors"
+)
+
+const (
+	adcVref = 33.0
 )
 
 var flightModeNames = map[int32]string{
@@ -38,14 +43,14 @@ var failsafePhaseNames = []string{
 	"LANDED",
 }
 
-var fieldUnits = map[string]string{
-	"time":             "us",
-	"vbatLatest":       "V",
-	"amperageLatest":   "A",
-	"energyCumulative": "mAh",
-	"flightModeFlags":  "flags",
-	"stateFlags":       "flags",
-	"failsafePhase":    "flags",
+var fieldUnits = map[blackbox.FieldName]string{
+	blackbox.FieldTime:             "us",
+	blackbox.FieldVbatLatest:       "V",
+	blackbox.FieldAmperageLatest:   "A",
+	blackbox.FieldEnergyCumulative: "mAh",
+	blackbox.FieldFlightModeFlags:  "flags",
+	blackbox.FieldStateFlags:       "flags",
+	blackbox.FieldFailsafePhase:    "flags",
 }
 
 type CsvFrameExporter struct {
@@ -53,22 +58,24 @@ type CsvFrameExporter struct {
 	lastSlow           *blackbox.SlowFrame
 	NumberOfFramesRead int
 	debugMode          bool
+	frameDef           blackbox.LogDefinition
 }
 
-func NewCsvFrameExporter(file io.Writer, debugMode bool) *CsvFrameExporter {
+func NewCsvFrameExporter(file io.Writer, debugMode bool, frameDef blackbox.LogDefinition) *CsvFrameExporter {
 	return &CsvFrameExporter{
 		target:    file,
 		lastSlow:  blackbox.NewSlowFrame([]int32{0, 0, 0, 0, 0}, 0, 0),
 		debugMode: debugMode,
+		frameDef:  frameDef,
 	}
 }
 
-func (e *CsvFrameExporter) WriteHeaders(def blackbox.LogDefinition) error {
+func (e *CsvFrameExporter) WriteHeaders() error {
 	var headers []string
-	for _, f := range def.FieldsI {
+	for _, f := range e.frameDef.FieldsI {
 		headers = append(headers, unitForField(f.Name))
 	}
-	for _, f := range def.FieldsS {
+	for _, f := range e.frameDef.FieldsS {
 		headers = append(headers, unitForField(f.Name))
 	}
 
@@ -120,17 +127,15 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 		e.NumberOfFramesRead++
 		var values []string
 		for k, v := range frame.Values().([]int32) {
-			//TODO: Read those header index dynamically
-			if k == 21 {
-				values = append(values, prependSpaceForField(k, fmt.Sprintf("%.3f", (33.0*float64(v)*110)/4095.0/100.0)))
+			if i, _ := e.frameDef.GetFieldIndex(blackbox.FieldVbatLatest); k == i {
+				vbat := (float64(v) * adcVref * 10.0 * float64(e.frameDef.Sysconfig.Vbatscale)) / 4095.0
+				values = append(values, prependSpaceForField(k, fmt.Sprintf("%.3f", math.Floor(vbat)/1000.0)))
 				continue
 			}
-			if k == 22 {
-				milliVolts := (uint32(v) * 33.0 * 100) / 4095
-				milliVolts -= 0
-
-				//TODO: Implement millivolts reading and currentMeterScale
-				values = append(values, prependSpaceForField(k, fmt.Sprintf("%.3f", float64(int64(milliVolts)*10000/400)/1000)))
+			if i, _ := e.frameDef.GetFieldIndex(blackbox.FieldAmperageLatest); k == i {
+				millivolts := float64((uint32(v)*adcVref*100)/4095) - float64(e.frameDef.Sysconfig.CurrentMeterOffset)
+				millivolts = (millivolts * 10000) / float64(e.frameDef.Sysconfig.CurrentMeterScale)
+				values = append(values, prependSpaceForField(k, fmt.Sprintf("%.3f", millivolts/1000)))
 				continue
 			}
 			values = append(values, prependSpaceForField(k, fmt.Sprintf("%d", v)))
@@ -151,10 +156,10 @@ func (e *CsvFrameExporter) writeNewLine() error {
 	return errors.Wrap(err, "could not write to the target file")
 }
 
-func unitForField(name string) string {
+func unitForField(name blackbox.FieldName) string {
 	v, ok := fieldUnits[name]
 	if !ok {
-		return name
+		return string(name)
 	}
 	return fmt.Sprintf("%s (%s)", name, v)
 }

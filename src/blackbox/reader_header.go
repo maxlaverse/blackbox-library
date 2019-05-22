@@ -9,24 +9,28 @@ import (
 	"github.com/pkg/errors"
 )
 
+type HeaderName string
+
+// List of all the headers used by the library
 const (
-	fieldProduct         = "Product"
-	fieldDataVersion     = "Data version"
-	fieldIName           = "Field I name"
-	fieldISigned         = "Field I signed"
-	fieldIPredictor      = "Field I predictor"
-	fieldIEncoding       = "Field I encoding"
-	fieldPPredictor      = "Field P predictor"
-	fieldPEncoding       = "Field P encoding"
-	fieldSName           = "Field S name"
-	fieldSSigned         = "Field S signed"
-	fieldSPredictor      = "Field S predictor"
-	fieldSEncoding       = "Field S encoding"
-	fieldVbatref         = "vbatref"
-	fieldVbatcellvoltage = "vbatcellvoltage"
-	fieldCurrentMeter    = "currentMeter"
-	fieldMotorOutput     = "motorOutput"
-	fieldFirmwareType    = "Firmware type"
+	HeaderProduct         HeaderName = "Product"
+	HeaderDataVersion     HeaderName = "Data version"
+	HeaderIName           HeaderName = "Field I name"
+	HeaderISigned         HeaderName = "Field I signed"
+	HeaderIPredictor      HeaderName = "Field I predictor"
+	HeaderIEncoding       HeaderName = "Field I encoding"
+	HeaderPPredictor      HeaderName = "Field P predictor"
+	HeaderPEncoding       HeaderName = "Field P encoding"
+	HeaderSName           HeaderName = "Field S name"
+	HeaderSSigned         HeaderName = "Field S signed"
+	HeaderSPredictor      HeaderName = "Field S predictor"
+	HeaderSEncoding       HeaderName = "Field S encoding"
+	HeaderVbatref         HeaderName = "vbatref"
+	HeaderVbatcellvoltage HeaderName = "vbatcellvoltage"
+	HeaderCurrentMeter    HeaderName = "currentMeter"
+	HeaderMotorOutput     HeaderName = "motorOutput"
+	HeaderFirmwareType    HeaderName = "Firmware type"
+	HeaderIInterval       HeaderName = "I interval"
 )
 
 // HeaderReader reads the headers of a log file
@@ -79,31 +83,31 @@ func (h *HeaderReader) parseHeader(out string) error {
 	re := regexp.MustCompile(`H ([^:]+):(.*)`)
 	match := re.FindStringSubmatch(out)
 
-	switch match[1] {
-	case fieldProduct:
+	switch HeaderName(match[1]) {
+	case HeaderProduct:
 		h.def.Product = match[2]
 
-	case fieldFirmwareType:
+	case HeaderFirmwareType:
 		h.def.Sysconfig.FirmwareType = match[2]
 
-	case fieldDataVersion:
+	case HeaderDataVersion:
 		b, err := strconv.ParseInt(match[2], 10, 32)
 		if err != nil {
 			return errors.Errorf("Could not parse fieldDataVersion '%s' to int", match[2])
 		}
 		h.def.DataVersion = int(b)
 
-	case fieldIName:
+	case HeaderIName:
 		fieldsRaw := strings.Split(match[2], ",")
 		for _, fr := range fieldsRaw {
 			d := FieldDefinition{
-				Name: fr,
+				Name: FieldName(fr),
 			}
 			h.def.FieldsI = append(h.def.FieldsI, d)
 			h.def.FieldsP = append(h.def.FieldsP, d)
 		}
 
-	case fieldISigned:
+	case HeaderISigned:
 		fieldsRaw := strings.Split(match[2], ",")
 		for i, fr := range fieldsRaw {
 			b, err := strconv.ParseBool(fr)
@@ -113,7 +117,7 @@ func (h *HeaderReader) parseHeader(out string) error {
 			h.def.FieldsI[i].Signed = b
 		}
 
-	case fieldIPredictor:
+	case HeaderIPredictor:
 		fieldsRaw := strings.Split(match[2], ",")
 		for i, fr := range fieldsRaw {
 			n, err := strconv.ParseInt(fr, 10, 8)
@@ -123,7 +127,7 @@ func (h *HeaderReader) parseHeader(out string) error {
 			h.def.FieldsI[i].Predictor = n
 		}
 
-	case fieldIEncoding:
+	case HeaderIEncoding:
 		fieldsRaw := strings.Split(match[2], ",")
 		for i, fr := range fieldsRaw {
 			n, err := strconv.ParseInt(fr, 10, 8)
@@ -134,7 +138,7 @@ func (h *HeaderReader) parseHeader(out string) error {
 
 		}
 
-	case fieldPPredictor:
+	case HeaderPPredictor:
 		fieldsRaw := strings.Split(match[2], ",")
 		for i, fr := range fieldsRaw {
 			n, err := strconv.ParseInt(fr, 10, 8)
@@ -144,7 +148,7 @@ func (h *HeaderReader) parseHeader(out string) error {
 			h.def.FieldsP[i].Predictor = n
 		}
 
-	case fieldPEncoding:
+	case HeaderPEncoding:
 		fieldsRaw := strings.Split(match[2], ",")
 		for i, fr := range fieldsRaw {
 			n, err := strconv.ParseInt(fr, 10, 8)
@@ -154,16 +158,16 @@ func (h *HeaderReader) parseHeader(out string) error {
 			h.def.FieldsP[i].Encoding = n
 		}
 
-	case fieldSName:
+	case HeaderSName:
 		fieldsRaw := strings.Split(match[2], ",")
 		for _, fr := range fieldsRaw {
 			d := FieldDefinition{
-				Name: fr,
+				Name: FieldName(fr),
 			}
 			h.def.FieldsS = append(h.def.FieldsS, d)
 		}
 
-	case fieldSSigned:
+	case HeaderSSigned:
 		fieldsRaw := strings.Split(match[2], ",")
 		for i, fr := range fieldsRaw {
 			b, err := strconv.ParseBool(fr)
@@ -173,7 +177,7 @@ func (h *HeaderReader) parseHeader(out string) error {
 			h.def.FieldsS[i].Signed = b
 		}
 
-	case fieldSPredictor:
+	case HeaderSPredictor:
 		fieldsRaw := strings.Split(match[2], ",")
 		for i, fr := range fieldsRaw {
 			n, err := strconv.ParseInt(fr, 10, 8)
@@ -183,7 +187,7 @@ func (h *HeaderReader) parseHeader(out string) error {
 			h.def.FieldsS[i].Predictor = n
 		}
 
-	case fieldSEncoding:
+	case HeaderSEncoding:
 		fieldsRaw := strings.Split(match[2], ",")
 		for i, fr := range fieldsRaw {
 			n, err := strconv.ParseInt(fr, 10, 8)
@@ -193,16 +197,16 @@ func (h *HeaderReader) parseHeader(out string) error {
 			h.def.FieldsS[i].Encoding = n
 		}
 
-	case fieldVbatref:
+	case HeaderVbatref:
 		val, err := strconv.ParseInt(match[2], 10, 32)
 		if err != nil {
 			return errors.Errorf("Could not parse fieldVbatref '%s' to int", match[2])
 		}
 		h.def.Sysconfig.Vbatref = uint16(val)
 
-	case fieldVbatcellvoltage:
+	case HeaderVbatcellvoltage:
 		header := Header{
-			Name:  fieldVbatcellvoltage,
+			Name:  HeaderVbatcellvoltage,
 			Value: match[2],
 		}
 		h.def.Headers = append(h.def.Headers, header)
@@ -210,25 +214,25 @@ func (h *HeaderReader) parseHeader(out string) error {
 		vals := strings.Split(match[2], ",")
 		val, err := strconv.ParseInt(vals[0], 10, 32)
 		if err != nil {
-			return errors.Errorf("Could not parse fieldVbatcellvoltage '%s' to int", vals[0])
+			return errors.Errorf("Could not parse first part of fieldVbatcellvoltage '%s' to int", vals[0])
 		}
 		h.def.Sysconfig.Vbatmincellvoltage = uint8(val)
 
 		val, err = strconv.ParseInt(vals[1], 10, 32)
 		if err != nil {
-			return errors.Errorf("Could not parse fieldVbatcellvoltage '%s' to int", vals[1])
+			return errors.Errorf("Could not parse second part of fieldVbatcellvoltage '%s' to int", vals[1])
 		}
 		h.def.Sysconfig.Vbatwarningcellvoltage = uint8(val)
 
 		val, err = strconv.ParseInt(vals[2], 10, 32)
 		if err != nil {
-			return errors.Errorf("Could not parse fieldVbatcellvoltage '%s' to int", vals[2])
+			return errors.Errorf("Could not parse third part of fieldVbatcellvoltage '%s' to int", vals[2])
 		}
 		h.def.Sysconfig.Vbatmaxcellvoltage = uint8(val)
 
-	case fieldCurrentMeter:
+	case HeaderCurrentMeter:
 		header := Header{
-			Name:  fieldCurrentMeter,
+			Name:  HeaderCurrentMeter,
 			Value: match[2],
 		}
 		h.def.Headers = append(h.def.Headers, header)
@@ -236,19 +240,19 @@ func (h *HeaderReader) parseHeader(out string) error {
 		vals := strings.Split(match[2], ",")
 		val, err := strconv.ParseInt(vals[0], 10, 32)
 		if err != nil {
-			return errors.Errorf("Could not parse fieldCurrentMeter '%s' to int", vals[0])
+			return errors.Errorf("Could not parse first part of fieldCurrentMeter '%s' to int", vals[0])
 		}
 		h.def.Sysconfig.CurrentMeterOffset = uint16(val)
 
 		val, err = strconv.ParseInt(vals[1], 10, 32)
 		if err != nil {
-			return errors.Errorf("Could not parse fieldCurrentMeter '%s' to int", vals[1])
+			return errors.Errorf("Could not parse second part of fieldCurrentMeter '%s' to int", vals[1])
 		}
 		h.def.Sysconfig.CurrentMeterScale = uint16(val)
 
-	case fieldMotorOutput:
+	case HeaderMotorOutput:
 		header := Header{
-			Name:  fieldMotorOutput,
+			Name:  HeaderMotorOutput,
 			Value: match[2],
 		}
 		h.def.Headers = append(h.def.Headers, header)
@@ -256,19 +260,19 @@ func (h *HeaderReader) parseHeader(out string) error {
 		vals := strings.Split(match[2], ",")
 		val, err := strconv.ParseInt(vals[0], 10, 32)
 		if err != nil {
-			return errors.Errorf("Could not parse fieldMotorOutput '%s' to int", vals[0])
+			return errors.Errorf("Could not parse first part of fieldMotorOutput '%s' to int", vals[0])
 		}
 		h.def.Sysconfig.MotorOutputLow = int(val)
 
 		val, err = strconv.ParseInt(vals[1], 10, 32)
 		if err != nil {
-			return errors.Errorf("Could not parse fieldMotorOutput '%s' to int", vals[1])
+			return errors.Errorf("Could not parse second part of fieldMotorOutput '%s' to int", vals[1])
 		}
 		h.def.Sysconfig.MotorOutputHigh = int(val)
 
 	default:
 		header := Header{
-			Name:  match[1],
+			Name:  HeaderName(match[1]),
 			Value: match[2],
 		}
 		h.def.Headers = append(h.def.Headers, header)
@@ -306,7 +310,7 @@ func (h *HeaderReader) parseHeader(out string) error {
 		}
 	}
 
-	h.def.FieldIRL = map[string]int{}
+	h.def.FieldIRL = map[FieldName]int{}
 	for i, field := range h.def.FieldsI {
 		h.def.FieldIRL[field.Name] = i
 	}

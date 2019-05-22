@@ -13,6 +13,20 @@ const (
 	logEventMaxFrameLength            = 256
 )
 
+type FieldName string
+
+// List of all the fields used by the library
+const (
+	FieldTime             FieldName = "time"
+	FieldVbatLatest       FieldName = "vbatLatest"
+	FieldAmperageLatest   FieldName = "amperageLatest"
+	FieldEnergyCumulative FieldName = "energyCumulative"
+	FieldFlightModeFlags  FieldName = "flightModeFlags"
+	FieldStateFlags       FieldName = "stateFlags"
+	FieldFailsafePhase    FieldName = "failsafePhase"
+	FieldMotor0           FieldName = "motor[0]"
+)
+
 // FrameReader reads and decodes data frame
 type FrameReader struct {
 	LoggingResumeLogIteration int32
@@ -42,7 +56,7 @@ type FrameReaderOptions struct {
 
 // NewFrameReader returns a new FrameReader
 func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameReaderOptions) (*FrameReader, error) {
-	val, err := frameDef.GetHeaderValue("I interval")
+	val, err := frameDef.GetHeaderValue(HeaderIInterval)
 	if err != nil {
 		return nil, err
 	}
