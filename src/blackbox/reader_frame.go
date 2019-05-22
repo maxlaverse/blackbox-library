@@ -91,69 +91,53 @@ func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameRead
 
 // ReadNextFrame reads the next frame
 func (f *FrameReader) ReadNextFrame() Frame {
-	// create some base frame to make sure we always have something to return
-	// even if we could not read any frame data
-	var frame Frame = &baseFrame{}
+	var frame Frame
 
 	// ---------------------------- PRE-READING ----------------------------- //
 
 	start := f.dec.BytesRead()
 	frameType, err := f.dec.ReadByte()
-	frame.setError(err)
 
-	// if frame had any errors on pre-reading stage - count as corrupted and return
-	if frame.Error() != nil {
-		f.countFrameAsCorrupted(frame)
-		return frame
-	}
+	// if we could not start reading frame - just make an empty errored frame
+	// and skip the reading/parsing stage
+	if err != nil {
+		frame = &baseFrame{error: err}
 
-	// -------------------------- READING/PARSING --------------------------- //
+	} else {
+		// ------------------------ READING/PARSING ------------------------- //
 
-	// parse next frame data based on its type
-	switch frameType {
-	case LogFrameEvent:
-		eventType, eventValues, err := f.parseEventFrame(f.dec)
-		frame = NewEventFrame(eventType, eventValues, start, f.dec.BytesRead())
-		frame.setError(err)
+		switch frameType {
+		case LogFrameEvent:
+			eventType, eventValues, err := f.parseEventFrame(f.dec)
+			frame = NewEventFrame(eventType, eventValues, start, f.dec.BytesRead())
+			frame.setError(err)
 
-	case LogFrameIntra:
-		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsI, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
-		frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
-		frame.setError(err)
+		case LogFrameIntra:
+			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsI, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
+			frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
+			frame.setError(err)
 
-	case LogFrameInter:
-		f.LastSkippedFrames = f.countIntentionallySkippedFrames()
-		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsP, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
-		frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
-		frame.setError(err)
+		case LogFrameInter:
+			f.LastSkippedFrames = f.countIntentionallySkippedFrames()
+			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsP, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
+			frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
+			frame.setError(err)
 
-	case LogFrameSlow:
-		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsS, nil, nil, f.dec, f.raw, 0)
-		frame = NewSlowFrame(values, start, f.dec.BytesRead())
-		frame.setError(err)
+		case LogFrameSlow:
+			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsS, nil, nil, f.dec, f.raw, 0)
+			frame = NewSlowFrame(values, start, f.dec.BytesRead())
+			frame.setError(err)
 
-	default:
-		frame.setError(frameErrorUnsupportedType(frameType))
-		//TODO: If a P frame is corrupt here, we should optionally drop the previous one (As the original implementation does)
-		f.flightLogReaderInvalidateStream()
-	}
-
-	// if frame had any errors on reading/parsing stage - count as corrupted and return
-	if frame.Error() != nil {
-		f.countFrameAsCorrupted(frame)
-		return frame
+		default:
+			frame = &baseFrame{error: frameErrorUnsupportedType(frameType)}
+			//TODO: If a P frame is corrupt here, we should optionally drop the previous one (As the original implementation does)
+			f.flightLogReaderInvalidateStream()
+		}
 	}
 
 	// ---------------------------- COMPLETING ------------------------------ //
 
 	f.PreComplete(frame)
-
-	// if frame had any errors on completing stage - count as corrupted and return
-	if frame.Error() != nil {
-		f.countFrameAsCorrupted(frame)
-		return frame
-	}
-
 	return frame
 }
 
@@ -232,6 +216,9 @@ func (f *FrameReader) PreComplete(frame Frame) (frameAccepted bool) {
 
 	if frame.Size() > logEventMaxFrameLength {
 		frame.setError(frameErrorLengthLimit(frame.Size()))
+	}
+	if frame.Error() != nil {
+		f.countFrameAsCorrupted(frame)
 		return false
 	}
 

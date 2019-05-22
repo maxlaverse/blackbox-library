@@ -49,12 +49,10 @@ func TestRawValues(t *testing.T) {
 
 	for k, line := range expectedLines {
 		t.Run(fmt.Sprintf("Line %d", k), func(t *testing.T) {
-			select {
-			case frame := <-frameChan:
-				assert.NoError(t, frame.Error())
-				err := csvExporter.WriteFrame(frame)
-				assert.NoError(t, err)
-			}
+			frame := <-frameChan
+			assert.NoError(t, frame.Error())
+			err := csvExporter.WriteFrame(frame)
+			assert.NoError(t, err)
 			assert.Equal(t, line, csvBuffer.String())
 		})
 		csvBuffer.Reset()
@@ -83,12 +81,10 @@ func TestNormalValues(t *testing.T) {
 
 	for k, line := range expectedLines {
 		t.Run(fmt.Sprintf("Line %d", k), func(t *testing.T) {
-			select {
-			case frame := <-frameChan:
-				assert.NoError(t, frame.Error())
-				err := csvExporter.WriteFrame(frame)
-				assert.NoError(t, err)
-			}
+			frame := <-frameChan
+			assert.NoError(t, frame.Error())
+			err := csvExporter.WriteFrame(frame)
+			assert.NoError(t, err)
 			assert.Equal(t, line, csvBuffer.String())
 		})
 		csvBuffer.Reset()
