@@ -42,12 +42,8 @@ type currentMeterState struct {
 }
 
 func NewCsvFrameExporter(file io.Writer, debugMode bool, frameDef blackbox.LogDefinition) *CsvFrameExporter {
-	hasAmperageAdc := false
-	for _, f := range frameDef.FieldsI {
-		if f.Name == blackbox.FieldAmperageLatest {
-			hasAmperageAdc = true
-		}
-	}
+	_, err := frameDef.GetFieldIndex(blackbox.FieldAmperageLatest)
+	hasAmperageAdc := err == nil
 
 	return &CsvFrameExporter{
 		target:    file,
@@ -63,93 +59,104 @@ func NewCsvFrameExporter(file io.Writer, debugMode bool, frameDef blackbox.LogDe
 func (e *CsvFrameExporter) WriteHeaders() error {
 	var headers []string
 	for _, f := range e.frameDef.FieldsI {
-		headers = append(headers, unitForField(f.Name))
+		headers = append(headers, fieldWithUnit(f.Name))
 	}
 	if e.state.hasAmperageAdc {
-		headers = append(headers, unitForField(blackbox.FieldEnergyCumulative))
+		headers = append(headers, fieldWithUnit(blackbox.FieldEnergyCumulative))
 	}
 	for _, f := range e.frameDef.FieldsS {
-		headers = append(headers, unitForField(f.Name))
+		headers = append(headers, fieldWithUnit(f.Name))
 	}
-
-	_, err := e.target.Write([]byte(strings.Join(headers, ", ")))
-	if err != nil {
-		return errors.Wrap(err, "could not write headers to the target file")
-	}
-
-	return e.writeNewLine()
+	return e.writeLn(strings.Join(headers, ", "))
 }
 
 func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
+	e.NumberOfFramesRead++
+
 	switch frame.(type) {
 
 	case *blackbox.EventFrame:
 		if !e.debugMode {
-			return nil
+			break
 		}
 
-		_, err := e.target.Write([]byte(frame.(*blackbox.EventFrame).String()))
+		err := e.writeLn(frame.(*blackbox.EventFrame).String())
 		if err != nil {
 			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))
 		}
 
 	case *blackbox.SlowFrame:
-		e.NumberOfFramesRead++
 		e.lastSlow = frame.(*blackbox.SlowFrame)
 		if !e.debugMode {
-			return nil
+			break
 		}
 
-		_, err := e.target.Write([]byte(frame.(*blackbox.SlowFrame).String()))
+		err := e.writeLn(frame.(*blackbox.SlowFrame).String())
 		if err != nil {
 			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))
 		}
 
 	case *blackbox.MainFrame:
-		e.NumberOfFramesRead++
-		var values []string
-		for k, v := range frame.Values().([]int32) {
-			if i, _ := e.frameDef.GetFieldIndex(blackbox.FieldVbatLatest); k == i {
-				vbat := (float64(v) * adcVref * 10.0 * float64(e.frameDef.Sysconfig.Vbatscale)) / 4095.0
-				values = append(values, prependSpaceForField(k, fmt.Sprintf("%.3f", math.Floor(vbat)/1000.0)))
-				continue
-			}
-			if i, _ := e.frameDef.GetFieldIndex(blackbox.FieldAmperageLatest); k == i {
-				millivolts := float64((uint32(v)*adcVref*100)/4095) - float64(e.frameDef.Sysconfig.CurrentMeterOffset)
-				millivolts = (millivolts * 10000) / float64(e.frameDef.Sysconfig.CurrentMeterScale)
-				e.state.currentMilliamps = millivolts
-				values = append(values, prependSpaceForField(k, fmt.Sprintf("%.3f", millivolts/1000)))
-				continue
-			}
-			values = append(values, prependSpaceForField(k, fmt.Sprintf("%d", v)))
-		}
-
-		if e.state.hasAmperageAdc {
-			if e.state.lastTime != 0.0 {
-				e.state.energyMilliampHours += (e.state.currentMilliamps * float64(frame.Values().([]int32)[1]-e.state.lastTime)) / (time.Hour.Seconds() * 1000000)
-			}
-			e.state.lastTime = frame.Values().([]int32)[1]
-
-			values = append(values, prependSpaceForField(0, fmt.Sprintf("%f", e.state.energyMilliampHours)))
-		}
-
-		for _, v := range e.lastSlow.StringValues() {
-			values = append(values, v)
-		}
-		_, err := e.target.Write([]byte(strings.Join(values, ", ")))
+		values := e.computeMainFrameValues(frame.(*blackbox.MainFrame).Values().([]int32))
+		err := e.writeLn(strings.Join(values, ", "))
 		if err != nil {
 			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))
 		}
 	}
-	return e.writeNewLine()
+	return nil
 }
 
-func (e *CsvFrameExporter) writeNewLine() error {
-	_, err := e.target.Write([]byte("\n"))
-	return errors.Wrap(err, "could not write to the target file")
+func (e *CsvFrameExporter) writeLn(data string) error {
+	return e.writeBytes(append([]byte(data), 10))
 }
 
-func unitForField(name blackbox.FieldName) string {
+func (e *CsvFrameExporter) writeBytes(data []byte) error {
+	_, err := e.target.Write(data)
+	return err
+}
+
+func (e *CsvFrameExporter) computeMainFrameValues(valuesS []int32) []string {
+	var values []string
+	for k, v := range valuesS {
+		if i, _ := e.frameDef.GetFieldIndex(blackbox.FieldVbatLatest); k == i {
+			values = append(values, prependSpaceForField(k, fmt.Sprintf("%.3f", calculateVbatLatest(v, e.frameDef.Sysconfig.Vbatscale))))
+			continue
+		}
+		if i, _ := e.frameDef.GetFieldIndex(blackbox.FieldAmperageLatest); k == i {
+			e.state.currentMilliamps = calculateAmperageLatest(v, e.frameDef.Sysconfig.CurrentMeterOffset, e.frameDef.Sysconfig.CurrentMeterScale)
+			values = append(values, prependSpaceForField(k, fmt.Sprintf("%.3f", e.state.currentMilliamps/1000)))
+			continue
+		}
+		values = append(values, prependSpaceForField(k, fmt.Sprintf("%d", v)))
+	}
+
+	if e.state.hasAmperageAdc {
+		if e.state.lastTime != 0.0 {
+			e.state.energyMilliampHours += (e.state.currentMilliamps * float64(valuesS[1]-e.state.lastTime)) / (time.Hour.Seconds() * 1000000)
+		}
+		e.state.lastTime = valuesS[1]
+
+		values = append(values, prependSpaceForField(0, fmt.Sprintf("%f", e.state.energyMilliampHours)))
+	}
+
+	for _, v := range e.lastSlow.StringValues() {
+		values = append(values, v)
+	}
+	return values
+}
+
+func calculateVbatLatest(value int32, scale uint8) float64 {
+	vbat := (float64(value) * adcVref * 10.0 * float64(scale)) / 4095.0
+	return math.Floor(vbat) / 1000.0
+}
+
+func calculateAmperageLatest(value int32, offset, scale uint16) float64 {
+	millivolts := float64((uint32(value)*adcVref*100)/4095) - float64(offset)
+	millivolts = (millivolts * 10000) / float64(scale)
+	return millivolts
+}
+
+func fieldWithUnit(name blackbox.FieldName) string {
 	v, ok := fieldUnits[name]
 	if !ok {
 		return string(name)
