@@ -97,11 +97,10 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 
 		var values []string
 		for k, v := range frame.Values().(map[string]interface{}) {
-			values = append(values, fmt.Sprintf("%s: %d", k, v))
+			values = append(values, fmt.Sprintf("%s: '%v'", k, v))
 		}
 		sort.Strings(values)
 
-		//TODO: Output the event type
 		_, err := e.target.Write([]byte(fmt.Sprintf("E frame: %s", strings.Join(values, ", "))))
 		if err != nil {
 			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))

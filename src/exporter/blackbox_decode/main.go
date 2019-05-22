@@ -38,7 +38,7 @@ func main() {
 
 	cmd.Flags().IntVarP(&opts.verbose, "verbose", "v", 0, "Be verbose on log output")
 	cmd.Flags().BoolVarP(&opts.raw, "raw", "", false, "Don't apply predictions to fields (show raw field deltas)")
-	cmd.Flags().BoolVarP(&opts.raw, "debug", "", false, "Show extra debugging information")
+	cmd.Flags().BoolVarP(&opts.debug, "debug", "", false, "Show extra debugging information")
 
 	if err := cmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
