@@ -13,3 +13,6 @@ run: clean bin/blackbox_decode
 
 test: all
 	V=$(V) go test -cover ./...
+
+benchmark: all
+	V=$(V) go test -count=5 -run=- -bench=. -test.benchmem ./...
