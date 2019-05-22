@@ -51,7 +51,7 @@ func TestRawValues(t *testing.T) {
 		t.Run(fmt.Sprintf("Line %d", k), func(t *testing.T) {
 			select {
 			case frame := <-frameChan:
-				assert.True(t, frame.IsValid())
+				assert.NoError(t, frame.Error())
 				err := csvExporter.WriteFrame(frame)
 				assert.NoError(t, err)
 			}
@@ -85,7 +85,7 @@ func TestNormalValues(t *testing.T) {
 		t.Run(fmt.Sprintf("Line %d", k), func(t *testing.T) {
 			select {
 			case frame := <-frameChan:
-				assert.True(t, frame.IsValid())
+				assert.NoError(t, frame.Error())
 				err := csvExporter.WriteFrame(frame)
 				assert.NoError(t, err)
 			}

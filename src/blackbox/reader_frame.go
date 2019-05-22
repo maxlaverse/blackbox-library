@@ -95,49 +95,63 @@ func (f *FrameReader) ReadNextFrame() Frame {
 	// even if we could not read any frame data
 	var frame Frame = &baseFrame{}
 
+	// ---------------------------- PRE-READING ----------------------------- //
+
 	start := f.dec.BytesRead()
 	frameType, err := f.dec.ReadByte()
-	if err != nil {
-		frame.addError(err)
+	frame.setError(err)
+
+	// if frame had any errors on pre-reading stage - count as corrupted and return
+	if frame.Error() != nil {
 		f.countFrameAsCorrupted(frame)
 		return frame
 	}
+
+	// -------------------------- READING/PARSING --------------------------- //
 
 	// parse next frame data based on its type
 	switch frameType {
 	case LogFrameEvent:
 		eventType, eventValues, err := f.parseEventFrame(f.dec)
 		frame = NewEventFrame(eventType, eventValues, start, f.dec.BytesRead())
-		frame.addError(err)
+		frame.setError(err)
 
 	case LogFrameIntra:
 		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsI, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
 		frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
-		frame.addError(err)
+		frame.setError(err)
 
 	case LogFrameInter:
 		f.LastSkippedFrames = f.countIntentionallySkippedFrames()
 		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsP, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
 		frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
-		frame.addError(err)
+		frame.setError(err)
 
 	case LogFrameSlow:
 		values, err := ParseFrame(f.frameDef, f.frameDef.FieldsS, nil, nil, f.dec, f.raw, 0)
 		frame = NewSlowFrame(values, start, f.dec.BytesRead())
-		frame.addError(err)
+		frame.setError(err)
 
 	default:
-		frame.addError(frameErrorUnsupportedType(frameType))
-		f.countFrameAsCorrupted(frame)
+		frame.setError(frameErrorUnsupportedType(frameType))
 		//TODO: If a P frame is corrupt here, we should optionally drop the previous one (As the original implementation does)
 		f.flightLogReaderInvalidateStream()
+	}
+
+	// if frame had any errors on reading/parsing stage - count as corrupted and return
+	if frame.Error() != nil {
+		f.countFrameAsCorrupted(frame)
 		return frame
 	}
 
+	// ---------------------------- COMPLETING ------------------------------ //
+
 	f.PreComplete(frame)
-	// if frame has any reading/parsing errors - it should be marked as corrupted
-	if !frame.IsValid() {
+
+	// if frame had any errors on completing stage - count as corrupted and return
+	if frame.Error() != nil {
 		f.countFrameAsCorrupted(frame)
+		return frame
 	}
 
 	return frame
@@ -216,12 +230,8 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventV
 func (f *FrameReader) PreComplete(frame Frame) (frameAccepted bool) {
 	f.Stats.TotalFrames++
 
-	if !frame.IsRead() {
-		return false
-	}
-
 	if frame.Size() > logEventMaxFrameLength {
-		frame.addError(frameErrorLengthLimit(frame.Size()))
+		frame.setError(frameErrorLengthLimit(frame.Size()))
 		return false
 	}
 
@@ -257,7 +267,7 @@ func (f *FrameReader) Complete(frame Frame) (frameCompleted bool) {
 	case LogFrameEvent:
 		return f.completeEventFrame()
 	default:
-		frame.addError(frameErrorUnsupportedType(frame.Type()))
+		frame.setError(frameErrorUnsupportedType(frame.Type()))
 		return false
 	}
 }

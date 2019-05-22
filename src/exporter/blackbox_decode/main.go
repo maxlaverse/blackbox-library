@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
 	"log"
 	"os"
 	"path"
@@ -89,16 +90,14 @@ func export(sourceFilepath string, opts cmdOptions) error {
 	}
 
 	for frame := range frameChan {
-		// stop if we could not properly read a frame
-		if !frame.IsRead() {
-			cancel()
-			return frame.Errors()[0]
-		}
-
-		// log but continue if we read the frame by it has some invalid data
-		if !frame.IsValid() {
-			for _, err := range frame.Errors() {
-				log.Printf("%+v", err)
+		// handle frame error
+		err := frame.Error()
+		if err != nil {
+			if isErrorRecoverable(err) {
+				log.Printf(`Frame '%s' with values %v has error: "%s"`, string(frame.Type()), frame.Values(), err.Error())
+			} else {
+				cancel()
+				return err
 			}
 		}
 
@@ -111,4 +110,13 @@ func export(sourceFilepath string, opts cmdOptions) error {
 	}
 
 	return nil
+}
+
+func isErrorRecoverable(err error) bool {
+	switch err.(type) {
+	case *stream.ReadError, stream.ReadError:
+		return false
+	default:
+		return true
+	}
 }
