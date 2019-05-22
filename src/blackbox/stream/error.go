@@ -1,14 +1,9 @@
 package stream
 
-import (
-	"github.com/pkg/errors"
-	"io"
-)
+type ReadError struct {
+	reason error
+}
 
-func errorWithStack(err error) error {
-	if err == io.EOF {
-		return err
-	} else {
-		return errors.WithStack(err)
-	}
+func (e ReadError) Error() string {
+	return e.reason.Error()
 }

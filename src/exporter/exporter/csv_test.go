@@ -12,7 +12,7 @@ import (
 )
 
 func TestCsvHeaders(t *testing.T) {
-	frameDef, frameChan, errChan, logFile := readFixture(t, "normal.bfl", blackbox.FlightLogReaderOpts{Raw: true})
+	frameDef, frameChan, logFile := readFixture(t, "normal.bfl", blackbox.FlightLogReaderOpts{Raw: true})
 	defer logFile.Close()
 
 	var csvBuffer bytes.Buffer
@@ -21,8 +21,6 @@ func TestCsvHeaders(t *testing.T) {
 	select {
 	case <-frameChan:
 		err := csvExporter.WriteHeaders()
-		assert.NoError(t, err)
-	case err := <-errChan:
 		assert.NoError(t, err)
 	}
 
@@ -43,7 +41,7 @@ func TestRawValues(t *testing.T) {
 		"E frame: data: '[69 110 100 32 111 102 32 108 111 103 0 10]', name: 'Log clean end'\n",
 	}
 
-	frameDef, frameChan, errChan, logFile := readFixture(t, "normal.bfl", blackbox.FlightLogReaderOpts{Raw: true})
+	frameDef, frameChan, logFile := readFixture(t, "normal.bfl", blackbox.FlightLogReaderOpts{Raw: true})
 	defer logFile.Close()
 
 	var csvBuffer bytes.Buffer
@@ -51,13 +49,10 @@ func TestRawValues(t *testing.T) {
 
 	for k, line := range expectedLines {
 		t.Run(fmt.Sprintf("Line %d", k), func(t *testing.T) {
-			select {
-			case frame := <-frameChan:
-				err := csvExporter.WriteFrame(frame)
-				assert.NoError(t, err)
-			case err := <-errChan:
-				assert.NoError(t, err)
-			}
+			frame := <-frameChan
+			assert.NoError(t, frame.Error())
+			err := csvExporter.WriteFrame(frame)
+			assert.NoError(t, err)
 			assert.Equal(t, line, csvBuffer.String())
 		})
 		csvBuffer.Reset()
@@ -78,7 +73,7 @@ func TestNormalValues(t *testing.T) {
 		"E frame: data: '[69 110 100 32 111 102 32 108 111 103 0 10]', name: 'Log clean end'\n",
 	}
 
-	frameDef, frameChan, errChan, logFile := readFixture(t, "normal.bfl", blackbox.FlightLogReaderOpts{Raw: false})
+	frameDef, frameChan, logFile := readFixture(t, "normal.bfl", blackbox.FlightLogReaderOpts{Raw: false})
 	defer logFile.Close()
 
 	var csvBuffer bytes.Buffer
@@ -86,26 +81,23 @@ func TestNormalValues(t *testing.T) {
 
 	for k, line := range expectedLines {
 		t.Run(fmt.Sprintf("Line %d", k), func(t *testing.T) {
-			select {
-			case frame := <-frameChan:
-				err := csvExporter.WriteFrame(frame)
-				assert.NoError(t, err)
-			case err := <-errChan:
-				assert.NoError(t, err)
-			}
+			frame := <-frameChan
+			assert.NoError(t, frame.Error())
+			err := csvExporter.WriteFrame(frame)
+			assert.NoError(t, err)
 			assert.Equal(t, line, csvBuffer.String())
 		})
 		csvBuffer.Reset()
 	}
 }
 
-func readFixture(t *testing.T, fixtureFile string, opts blackbox.FlightLogReaderOpts) (blackbox.LogDefinition, <-chan blackbox.Frame, <-chan error, *os.File) {
+func readFixture(t *testing.T, fixtureFile string, opts blackbox.FlightLogReaderOpts) (blackbox.LogDefinition, <-chan blackbox.Frame, *os.File) {
 	flightLog := blackbox.NewFlightLogReader(opts)
 	logFile, err := os.Open(fmt.Sprintf("../../../fixtures/%s", fixtureFile))
 	assert.NoError(t, err)
 
-	frameChan, errChan, err := flightLog.LoadFile(logFile, context.Background())
+	frameChan, err := flightLog.LoadFile(logFile, context.Background())
 	assert.NoError(t, err)
 
-	return flightLog.FrameDef, frameChan, errChan, logFile
+	return flightLog.FrameDef, frameChan, logFile
 }

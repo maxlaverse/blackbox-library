@@ -39,13 +39,27 @@ var failsafePhaseNames = []string{
 type Frame interface {
 	Type() LogFrameType
 	Values() interface{}
+	Sizer
+	Errorer
+}
+
+type Sizer interface {
 	Size() int
+}
+
+type Errorer interface {
+	// Error returns error which happened during reading/parsing the frame, or nil
+	Error() error
+	// setError adds the error to the frame
+	setError(err error)
 }
 
 // -------------------------------------------------------------------------- //
 
 type baseFrame struct {
 	frameType LogFrameType
+	values    interface{}
+	error     error
 	start     int64
 	end       int64
 }
@@ -54,9 +68,21 @@ func (f baseFrame) Type() LogFrameType {
 	return f.frameType
 }
 
+func (f baseFrame) Values() interface{} {
+	return f.values
+}
+
 // Size returns the size in bytes of a Frame
 func (f baseFrame) Size() int {
 	return int(f.end - f.start)
+}
+
+func (f baseFrame) Error() error {
+	return f.error
+}
+
+func (f *baseFrame) setError(err error) {
+	f.error = err
 }
 
 // -------------------------------------------------------------------------- //

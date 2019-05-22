@@ -5,6 +5,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
+	"log"
 	"os"
 	"path"
 	"strconv"
@@ -75,41 +77,46 @@ func export(sourceFilepath string, opts cmdOptions) error {
 	// iterate over frames and write them to CSV
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
-	frameChan, errChan, err := flightLog.LoadFile(logFile, ctx)
+	frameChan, err := flightLog.LoadFile(logFile, ctx)
 	if err != nil {
 		return err
 	}
 
 	// prepare exporter and write CSV headers
 	csvExporter := exporter.NewCsvFrameExporter(bufferedWriter, opts.debug, flightLog.FrameDef)
+	err = csvExporter.WriteHeaders()
+	if err != nil {
+		return err
+	}
 
-	headersSent := false
-	for {
-		select {
-		// read frames and write to CSV
-		case frame := <-frameChan:
-			// write headers before first row
-			if !headersSent {
-				err = csvExporter.WriteHeaders()
-				headersSent = true
-			}
-			if err != nil {
-				return err
-			}
-
-			// write CSV row
-			err = csvExporter.WriteFrame(frame)
-			if err != nil {
+	for frame := range frameChan {
+		// handle frame error
+		err := frame.Error()
+		if err != nil {
+			if isErrorRecoverable(err) {
+				log.Printf(`Frame '%s' with values %v has error: "%s"`, string(frame.Type()), frame.Values(), err.Error())
+			} else {
 				cancel()
 				return err
 			}
+		}
 
-		// read errors
-		case err := <-errChan:
+		// write CSV row
+		err = csvExporter.WriteFrame(frame)
+		if err != nil {
 			cancel()
 			return err
-
-		default:
 		}
+	}
+
+	return nil
+}
+
+func isErrorRecoverable(err error) bool {
+	switch err.(type) {
+	case *stream.ReadError, stream.ReadError:
+		return false
+	default:
+		return true
 	}
 }
