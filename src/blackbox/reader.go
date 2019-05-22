@@ -38,11 +38,12 @@ func NewFlightLogReader(opts FlightLogReaderOpts) *FlightLogReader {
 // Returns channel with successfully parsed frames and channel with errors.
 func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan Frame, <-chan error) {
 	frameChan := make(chan Frame)
-	errChan := make(chan error, 2)
+	errChan := make(chan error)
 
 	frameReader, decoder, err := f.initFrameReader(file)
 	if err != nil {
-		errChan <- err
+		go func() { errChan <- err }()
+		return frameChan, errChan
 	}
 
 	go func() {
