@@ -1,13 +1,5 @@
 package stream
 
-// SignExtend14Bit signs
-func SignExtend14Bit(val uint16) int32 {
-	if val&0x2000 == 0x2000 {
-		return int32(int16(val | 0xC000))
-	}
-	return int32(val)
-}
-
 // SignExtend2Bit signs
 func SignExtend2Bit(val uint8) int32 {
 	if val&0x02 == 0x02 {
@@ -30,4 +22,20 @@ func SignExtend6Bit(nibble uint8) int32 {
 		return int32(int8(nibble | 0xC0))
 	}
 	return int32(nibble)
+}
+
+// SignExtend14Bit signs
+func SignExtend14Bit(val uint16) int32 {
+	if val&0x2000 == 0x2000 {
+		return int32(int16(val | 0xC000))
+	}
+	return int32(val)
+}
+
+// SignExtend24Bit signs
+func SignExtend24Bit(val uint32) int32 {
+	if val&0x800000 == 0x800000 {
+		return int32(int32(val | 0xFF000000))
+	}
+	return int32(val)
 }
