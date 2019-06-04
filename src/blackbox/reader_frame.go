@@ -47,7 +47,7 @@ type FrameReader struct {
 	Stats                     *StatsType
 	dec                       *stream.Decoder
 	frameDef                  LogDefinition
-	raw                       bool
+	disablePredictions        bool
 }
 
 // FrameReaderOptions holds the options to create a new FrameReader
@@ -85,7 +85,7 @@ func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameRead
 		LastSkippedFrames:      0,
 	}
 	if opts != nil {
-		frameReader.raw = opts.Raw
+		frameReader.disablePredictions = opts.Raw
 	}
 	return &frameReader, nil
 }
@@ -114,18 +114,18 @@ func (f *FrameReader) ReadNextFrame() Frame {
 			frame.setError(err)
 
 		case LogFrameIntra:
-			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsI, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
+			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsI, f.Previous, f.PreviousPrevious, f.dec, f.disablePredictions, f.LastSkippedFrames)
 			frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
 			frame.setError(err)
 
 		case LogFrameInter:
 			f.LastSkippedFrames = f.countIntentionallySkippedFrames()
-			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsP, f.Previous, f.PreviousPrevious, f.dec, f.raw, f.LastSkippedFrames)
+			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsP, f.Previous, f.PreviousPrevious, f.dec, f.disablePredictions, f.LastSkippedFrames)
 			frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
 			frame.setError(err)
 
 		case LogFrameSlow:
-			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsS, nil, nil, f.dec, f.raw, 0)
+			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsS, nil, nil, f.dec, f.disablePredictions, 0)
 			frame = NewSlowFrame(values, start, f.dec.BytesRead())
 			frame.setError(err)
 
