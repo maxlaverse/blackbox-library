@@ -1,6 +1,7 @@
 package blackbox
 
 import (
+	"bytes"
 	"strconv"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
@@ -108,7 +109,7 @@ func (f *FrameReader) ReadNextFrame() Frame {
 
 		switch frameType {
 		case LogFrameEvent:
-			eventType, eventValues, err := f.parseEventFrame(f.dec)
+			eventType, eventValues, err := f.parseEventFrame()
 			frame = NewEventFrame(eventType, eventValues, start, f.dec.BytesRead())
 			frame.setError(err)
 
@@ -141,9 +142,31 @@ func (f *FrameReader) ReadNextFrame() Frame {
 	return frame
 }
 
-func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventValues, error) {
+func (f *FrameReader) ConsumeToNext() (skippedFrames int64, err error) {
+	initialPos := f.dec.BytesRead()
+	for i := 0; i < 256; i++ {
+		b, err := f.dec.NextByte()
+		if err != nil {
+			return 0, err
+		}
+
+		if bytes.IndexByte(LogFrameAllTypes, b) != -1 {
+			newPos := f.dec.BytesRead()
+			return newPos - initialPos, nil
+		}
+
+		_, err = f.dec.ReadByte()
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return 0, errors.New("FlightLogReader: could not find next frame")
+}
+
+func (f *FrameReader) parseEventFrame() (LogEventType, eventValues, error) {
 	values := make(eventValues)
-	eventType, err := dec.ReadByte()
+	eventType, err := f.dec.ReadByte()
 	if err != nil {
 		return 0, nil, err
 	}
@@ -151,7 +174,7 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventV
 
 	switch eventType {
 	case LogEventSyncBeep:
-		beepTime, err := dec.ReadUnsignedVB()
+		beepTime, err := f.dec.ReadUnsignedVB()
 		if err != nil {
 			return 0, nil, err
 		}
@@ -162,13 +185,13 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventV
 		return 0, nil, errors.New("Not implemented: logEventInflightAdjustment")
 
 	case LogEventLoggingResume:
-		val, err := dec.ReadUnsignedVB()
+		val, err := f.dec.ReadUnsignedVB()
 		if err != nil {
 			return 0, nil, err
 		}
 		f.LoggingResumeLogIteration = int32(val)
 
-		val, err = dec.ReadUnsignedVB()
+		val, err = f.dec.ReadUnsignedVB()
 		if err != nil {
 			return 0, nil, err
 		}
@@ -178,11 +201,11 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventV
 		values["currentTime"] = f.LoggingResumeCurrentTime
 
 	case LogEventFlightMode:
-		flags, err := dec.ReadUnsignedVB()
+		flags, err := f.dec.ReadUnsignedVB()
 		if err != nil {
 			return 0, nil, err
 		}
-		lastFlags, err := dec.ReadUnsignedVB()
+		lastFlags, err := f.dec.ReadUnsignedVB()
 		if err != nil {
 			return 0, nil, err
 		}
@@ -191,12 +214,12 @@ func (f *FrameReader) parseEventFrame(dec *stream.Decoder) (LogEventType, eventV
 		values["lastFlags"] = lastFlags
 
 	case LogEventLogEnd:
-		val, err := dec.ReadBytes(12)
+		val, err := f.dec.ReadBytes(12)
 		if err != nil {
 			return 0, nil, err
 		}
 
-		reachedEndOfFile, err := dec.EOF()
+		reachedEndOfFile, err := f.dec.EOF()
 		if err != nil {
 			return 0, nil, err
 		}

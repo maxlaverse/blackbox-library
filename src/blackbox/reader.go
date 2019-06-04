@@ -2,12 +2,10 @@ package blackbox
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"io"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -37,7 +35,7 @@ func NewFlightLogReader(opts FlightLogReaderOpts) *FlightLogReader {
 // Accepts context and stops processing when the context is canceled.
 // Returns channel with successfully parsed frames and channel with errors.
 func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan Frame, error) {
-	frameReader, decoder, err := f.initFrameReader(file)
+	frameReader, err := f.initFrameReader(file)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +63,7 @@ func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan 
 
 			if frame.Error() != nil {
 				// Try to consume the remaining bytes from the broken frame
-				if _, err = consumeToNext(decoder); err != nil {
+				if _, err = frameReader.ConsumeToNext(); err != nil {
 					frame.setError(err)
 					frameChan <- frame
 					return
@@ -80,14 +78,14 @@ func (f *FlightLogReader) LoadFile(file io.Reader, ctx context.Context) (<-chan 
 	return frameChan, nil
 }
 
-func (f *FlightLogReader) initFrameReader(file io.Reader) (*FrameReader, *stream.Decoder, error) {
+func (f *FlightLogReader) initFrameReader(file io.Reader) (*FrameReader, error) {
 	bufferedStream := bufio.NewReaderSize(file, defaultBufferSize)
 
 	decoder := stream.NewDecoder(bufferedStream)
 	headerReader := NewHeaderReader(decoder)
 	frameDefinition, err := headerReader.ProcessHeaders()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	f.FrameDef = frameDefinition
@@ -95,29 +93,5 @@ func (f *FlightLogReader) initFrameReader(file io.Reader) (*FrameReader, *stream
 	opts := &FrameReaderOptions{
 		Raw: f.opts.Raw,
 	}
-	frameReader, err := NewFrameReader(decoder, frameDefinition, opts)
-
-	return frameReader, decoder, err
-}
-
-func consumeToNext(enc *stream.Decoder) (skippedFrames int64, err error) {
-	initialPos := enc.BytesRead()
-	for i := 0; i < 256; i++ {
-		b, err := enc.NextByte()
-		if err != nil {
-			return 0, err
-		}
-
-		if bytes.IndexByte(LogFrameAllTypes, b) != -1 {
-			newPos := enc.BytesRead()
-			return newPos - initialPos, nil
-		}
-
-		_, err = enc.ReadByte()
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	return 0, errors.New("FlightLogReader: could not find next frame")
+	return NewFrameReader(decoder, frameDefinition, opts)
 }
