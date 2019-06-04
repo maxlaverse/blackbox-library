@@ -20,7 +20,7 @@ func BenchmarkReadFrames(b *testing.B) {
 		bytesRead := 0
 
 		flightLog := NewFlightLogReader(FlightLogReaderOpts{Raw: true})
-		frameChan, err := flightLog.LoadFile(logFile, context.Background())
+		frameChan, err := flightLog.LoadFile(context.Background(), logFile)
 		assert.NoError(b, err)
 
 		for frame := range frameChan {

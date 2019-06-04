@@ -2,22 +2,30 @@ package blackbox
 
 import (
 	"bytes"
-	"strconv"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
 	"github.com/pkg/errors"
 )
 
 const (
+	// maximumIterationJumpBetweenFrames is the maximum number of frames that can be missing without
+	// declaring the stream as invalid
 	maximumIterationJumpBetweenFrames = 5000
-	maximumTimeJumpBetweenFrames      = 10 * 1000000
-	logEventMaxFrameLength            = 256
+
+	// maximumTimeJumpBetweenFrames is the maximum delay in microseconds between two consecutive main
+	// frames before the stream is declared invalid
+	maximumTimeJumpBetweenFrames = 10 * 1000000
+
+	// maxFrameLength is the maximum size of a frame. Bigger means something is off
+	maxFrameLength = 256
 )
 
+// FieldName is the type for main frame fields
 type FieldName string
 
 // List of all the fields used by the library
 const (
+	FieldIteration        FieldName = "loopIteration"
 	FieldTime             FieldName = "time"
 	FieldVbatLatest       FieldName = "vbatLatest"
 	FieldAmperageLatest   FieldName = "amperageLatest"
@@ -30,24 +38,15 @@ const (
 
 // FrameReader reads and decodes data frame
 type FrameReader struct {
-	LoggingResumeLogIteration int32
-	LastEventType             *LogEventType
-	LastSkippedFrames         int32
-	LoggingResumeCurrentTime  int32
-	timeRolloverAccumulator   int32
-	Finished                  bool
-	LastMainFrameIteration    int32
-	LastMainFrameTime         int32
-	MainStreamIsValid         bool
-	Previous                  *MainFrame
-	PreviousPrevious          *MainFrame
-	frameIntervalI            int
-	frameIntervalPNum         int
-	frameIntervalPDenom       int
-	Stats                     *StatsType
-	dec                       *stream.Decoder
-	frameDef                  LogDefinition
-	disablePredictions        bool
+	timeRolloverAccumulator int32
+	lastMainFrameIteration  int32
+	lastMainFrameTime       int32
+	mainStreamIsValid       bool
+	previousFrame1          *MainFrame
+	previousFrame2          *MainFrame
+	dec                     *stream.Decoder
+	frameDef                LogDefinition
+	opts                    FrameReaderOptions
 }
 
 // FrameReaderOptions holds the options to create a new FrameReader
@@ -56,328 +55,161 @@ type FrameReaderOptions struct {
 }
 
 // NewFrameReader returns a new FrameReader
-func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameReaderOptions) (*FrameReader, error) {
-	val, err := frameDef.GetHeaderValue(HeaderIInterval)
-	if err != nil {
-		return nil, err
-	}
-	frameIntervalI, err := strconv.ParseInt(val, 10, 32)
-	if err != nil {
-		return nil, err
-	}
-	if frameIntervalI < 1 {
-		frameIntervalI = 1
+func NewFrameReader(dec *stream.Decoder, frameDef LogDefinition, opts *FrameReaderOptions) *FrameReader {
+	if opts == nil {
+		opts = &FrameReaderOptions{}
 	}
 
-	//TODO: Set frameIntervalPNum and frameIntervalPDenom based on "P Interval" header
-
-	frameReader := FrameReader{
-		dec:                 dec,
-		frameDef:            frameDef,
-		frameIntervalI:      int(frameIntervalI),
-		frameIntervalPNum:   1,
-		frameIntervalPDenom: 1,
-		Stats: &StatsType{
-			Frame: map[LogFrameType]StatsFrameType{},
-		},
-		LastMainFrameIteration: -1,
-		LastMainFrameTime:      -1,
-		LastSkippedFrames:      0,
+	return &FrameReader{
+		dec:                    dec,
+		frameDef:               frameDef,
+		lastMainFrameIteration: -1,
+		lastMainFrameTime:      -1,
+		opts:                   *opts,
 	}
-	if opts != nil {
-		frameReader.disablePredictions = opts.Raw
-	}
-	return &frameReader, nil
 }
 
 // ReadNextFrame reads the next frame
 func (f *FrameReader) ReadNextFrame() Frame {
-	var frame Frame
+	startOffset := f.dec.Offset()
 
-	// ---------------------------- PRE-READING ----------------------------- //
-
-	start := f.dec.BytesRead()
+	// Determine the type of the next frame
 	frameType, err := f.dec.ReadByte()
-
-	// if we could not start reading frame - just make an empty errored frame
-	// and skip the reading/parsing stage
 	if err != nil {
-		frame = &baseFrame{error: err}
-
-	} else {
-		// ------------------------ READING/PARSING ------------------------- //
-
-		switch frameType {
-		case LogFrameEvent:
-			eventType, eventValues, err := f.parseEventFrame()
-			frame = NewEventFrame(eventType, eventValues, start, f.dec.BytesRead())
-			frame.setError(err)
-
-		case LogFrameIntra:
-			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsI, f.Previous, f.PreviousPrevious, f.dec, f.disablePredictions, f.LastSkippedFrames)
-			frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
-			frame.setError(err)
-
-		case LogFrameInter:
-			f.LastSkippedFrames = f.countIntentionallySkippedFrames()
-			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsP, f.Previous, f.PreviousPrevious, f.dec, f.disablePredictions, f.LastSkippedFrames)
-			frame = NewMainFrame(frameType, values, start, f.dec.BytesRead())
-			frame.setError(err)
-
-		case LogFrameSlow:
-			values, err := ParseFrame(f.frameDef, f.frameDef.FieldsS, nil, nil, f.dec, f.disablePredictions, 0)
-			frame = NewSlowFrame(values, start, f.dec.BytesRead())
-			frame.setError(err)
-
-		default:
-			frame = &baseFrame{error: frameErrorUnsupportedType(frameType)}
-			//TODO: If a P frame is corrupt here, we should optionally drop the previous one (As the original implementation does)
-			f.flightLogReaderInvalidateStream()
-		}
+		return NewErrorFrame(nil, startOffset, f.dec.Offset(), err)
 	}
 
-	// ---------------------------- COMPLETING ------------------------------ //
+	// Read the frame
+	frame := f.parseFrame(frameType, startOffset)
 
-	f.PreComplete(frame)
+	// Check if the frame could be read and as at least a reasonable size
+	if frame.Error() != nil && frame.Size() > maxFrameLength {
+		frame.setError(frameErrorLengthLimit(frame.Size()))
+		return frame
+	}
+
+	// Verify the frame is actually alright and update the reader's state
+	frameAccepted := f.validateFrame(frame)
+	frame.setValidity(frameAccepted)
 	return frame
 }
 
-func (f *FrameReader) ConsumeToNext() (skippedFrames int64, err error) {
-	initialPos := f.dec.BytesRead()
-	for i := 0; i < 256; i++ {
-		b, err := f.dec.NextByte()
-		if err != nil {
-			return 0, err
-		}
-
-		if bytes.IndexByte(LogFrameAllTypes, b) != -1 {
-			newPos := f.dec.BytesRead()
-			return newPos - initialPos, nil
-		}
-
-		_, err = f.dec.ReadByte()
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	return 0, errors.New("FlightLogReader: could not find next frame")
-}
-
-func (f *FrameReader) parseEventFrame() (LogEventType, eventValues, error) {
-	values := make(eventValues)
-	eventType, err := f.dec.ReadByte()
-	if err != nil {
-		return 0, nil, err
-	}
-	f.LastEventType = &eventType
-
-	switch eventType {
-	case LogEventSyncBeep:
-		beepTime, err := f.dec.ReadUnsignedVB()
-		if err != nil {
-			return 0, nil, err
-		}
-		values["name"] = "Sync beep"
-		values["beepTime"] = beepTime
-
-	case LogEventInflightAdjustment:
-		return 0, nil, errors.New("Not implemented: logEventInflightAdjustment")
-
-	case LogEventLoggingResume:
-		val, err := f.dec.ReadUnsignedVB()
-		if err != nil {
-			return 0, nil, err
-		}
-		f.LoggingResumeLogIteration = int32(val)
-
-		val, err = f.dec.ReadUnsignedVB()
-		if err != nil {
-			return 0, nil, err
-		}
-		f.LoggingResumeCurrentTime = int32(val) + f.timeRolloverAccumulator
-		values["name"] = "Logging resume"
-		values["iteration"] = f.LoggingResumeLogIteration
-		values["currentTime"] = f.LoggingResumeCurrentTime
-
-	case LogEventFlightMode:
-		flags, err := f.dec.ReadUnsignedVB()
-		if err != nil {
-			return 0, nil, err
-		}
-		lastFlags, err := f.dec.ReadUnsignedVB()
-		if err != nil {
-			return 0, nil, err
-		}
-		values["name"] = "Flight mode"
-		values["flags"] = flags
-		values["lastFlags"] = lastFlags
-
-	case LogEventLogEnd:
-		val, err := f.dec.ReadBytes(12)
-		if err != nil {
-			return 0, nil, err
-		}
-
-		reachedEndOfFile, err := f.dec.EOF()
-		if err != nil {
-			return 0, nil, err
-		}
-		if !reachedEndOfFile {
-			return 0, nil, errors.New("There are additional data after the end of the file")
-		}
-		f.Finished = true
-		values["name"] = "Log clean end"
-		values["data"] = val
-
-	default:
-		return 0, nil, errors.Errorf("Event type is unknown - ignored: %v\n", eventType)
-	}
-
-	return eventType, values, nil
-}
-
-// PreComplete updates the reading state machine based on a frame
-func (f *FrameReader) PreComplete(frame Frame) (frameAccepted bool) {
-	f.Stats.TotalFrames++
-
-	if frame.Size() > logEventMaxFrameLength {
-		frame.setError(frameErrorLengthLimit(frame.Size()))
-	}
-	if frame.Error() != nil {
-		f.countFrameAsCorrupted(frame)
-		return false
-	}
-
-	frameAccepted = f.Complete(frame)
-
-	if frameAccepted {
-		d := f.Stats.Frame[frame.Type()]
-		d.Bytes += int64(frame.Size())
-		d.ValidCount++
-		if d.SizeCount == nil {
-			d.SizeCount = map[int]int{}
-		}
-		d.SizeCount[frame.Size()]++
-		f.Stats.Frame[frame.Type()] = d
-	}
-
-	d := f.Stats.Frame[frame.Type()]
-	d.DesyncCount++
-	f.Stats.Frame[frame.Type()] = d
-
-	return frameAccepted
-}
-
-// Complete acknowledge and saves a frame
-func (f *FrameReader) Complete(frame Frame) (frameCompleted bool) {
-	switch frame.Type() {
-	case LogFrameIntra:
-		return f.completeFrameIntra(frame.(*MainFrame))
-	case LogFrameInter:
-		return f.completeFrameInter(frame.(*MainFrame))
-	case LogFrameSlow:
-		return f.completeSlowFrame(frame.(*SlowFrame))
+// parseFrame reads bytes until a frame is complete
+func (f *FrameReader) parseFrame(frameType byte, startOffset int64) Frame {
+	switch frameType {
 	case LogFrameEvent:
-		return f.completeEventFrame()
+		eventType, values, err := parseEventFrame(f.dec)
+		return NewEventFrame(eventType, values, startOffset, f.dec.Offset(), err)
+
+	case LogFrameSlow:
+		values, err := parseStateFrame(f.frameDef, f.frameDef.FieldsS, nil, nil, f.dec, f.opts.Raw, 0)
+		return NewSlowFrame(values, startOffset, f.dec.Offset(), err)
+
+	case LogFrameIntra:
+		values, err := parseStateFrame(f.frameDef, f.frameDef.FieldsI, f.previousFrame1, f.previousFrame2, f.dec, f.opts.Raw, 0)
+		return NewMainFrame(frameType, values, startOffset, f.dec.Offset(), err)
+
+	case LogFrameInter:
+		values, err := parseStateFrame(f.frameDef, f.frameDef.FieldsP, f.previousFrame1, f.previousFrame2, f.dec, f.opts.Raw, f.countIntentionallySkippedFrames())
+		return NewMainFrame(frameType, values, startOffset, f.dec.Offset(), err)
+
 	default:
-		frame.setError(frameErrorUnsupportedType(frame.Type()))
-		return false
+		values, err := f.readBytesToNextFrame()
+		return NewErrorFrame(values, startOffset, f.dec.Offset(), errors.WithStack(frameErrorUnsupportedType(frameType, err)))
 	}
 }
 
-func (f *FrameReader) countFrameAsCorrupted(frame Frame) {
-	f.MainStreamIsValid = false
-	d := f.Stats.Frame[frame.Type()]
-	d.CorruptCount++
-	f.Stats.Frame[frame.Type()] = d
-	f.Stats.TotalCorruptedFrames++
-}
-
-func (f *FrameReader) completeFrameIntra(frame *MainFrame) bool {
-	// Change time
-	f.flightLogApplyMainFrameTimeRollover(frame)
-
-	// Only attempt to validate the frame values if we have something to check it against
-	if f.LastMainFrameIteration != -1 && !f.verifyFrameMainValues(frame) {
-		f.flightLogReaderInvalidateStream()
-	} else {
-		f.MainStreamIsValid = true
-	}
-
-	if f.MainStreamIsValid {
-		f.Stats.IntentionallyAbsentIterations += int(f.countIntentionallySkippedFramesTo(frame.values[0]))
-
-		f.LastMainFrameIteration = frame.values[0]
-		f.LastMainFrameTime = frame.values[1]
-	}
-
-	if f.MainStreamIsValid {
-		//TODO: Append the frame to an array, and push bash through a channel
-		f.Previous = frame
-		f.PreviousPrevious = frame
-	}
-	return f.MainStreamIsValid
-}
-
-func (f *FrameReader) completeFrameInter(frame *MainFrame) bool {
-	f.flightLogApplyMainFrameTimeRollover(frame)
-
-	if f.LastMainFrameIteration != -1 && !f.verifyFrameMainValues(frame) {
-		f.flightLogReaderInvalidateStream()
-	}
-
-	if f.MainStreamIsValid {
-		f.LastMainFrameIteration = frame.values[0]
-		f.LastMainFrameTime = frame.values[1]
-		f.Stats.IntentionallyAbsentIterations += int(f.LastSkippedFrames)
-	}
-
-	// Receiving a P frame can't resynchronise the stream so it doesn't set mainStreamIsValid to true
-	if f.MainStreamIsValid {
-		f.PreviousPrevious = f.Previous
-		f.Previous = frame
-	}
-	return f.MainStreamIsValid
-}
-
-func (f *FrameReader) completeSlowFrame(frame *SlowFrame) bool {
-	return true
-}
-
-func (f *FrameReader) completeEventFrame() bool {
-	if f.LastEventType != nil {
-		if *f.LastEventType == LogEventLoggingResume {
-			f.LastMainFrameIteration = f.LoggingResumeLogIteration
-			f.LastMainFrameTime = f.LoggingResumeCurrentTime
+// validateFrame checks if a frame is valid and update the reader's internal state
+func (f *FrameReader) validateFrame(frame Frame) bool {
+	switch frame.Type() {
+	case LogFrameEvent:
+		if frame.(*EventFrame).EventType() == LogEventLoggingResume {
+			f.lastMainFrameIteration = frame.Values().(map[string]interface{})["iteration"].(int32)
+			f.lastMainFrameTime = frame.Values().(map[string]interface{})["currentTime"].(int32) + f.timeRolloverAccumulator
 		}
-		f.MainStreamIsValid = true
 		return true
+
+	case LogFrameSlow:
+		return true
+
+	case LogFrameIntra:
+		f.flightLogApplyMainFrameTimeRollover(frame.(*MainFrame))
+
+		if !f.opts.Raw && f.lastMainFrameIteration != -1 && !f.validateMainFrameValues(frame.(*MainFrame)) {
+			f.mainStreamIsValid = false
+			f.previousFrame1 = nil
+			f.previousFrame2 = nil
+		} else {
+			f.mainStreamIsValid = true
+		}
+
+		if f.mainStreamIsValid {
+			f.lastMainFrameIteration = frame.(*MainFrame).values[0]
+			f.lastMainFrameTime = frame.(*MainFrame).values[1]
+
+			// Rotate history buffers
+			f.previousFrame2 = frame.(*MainFrame)
+			f.previousFrame1 = frame.(*MainFrame)
+		}
+		return f.mainStreamIsValid
+
+	case LogFrameInter:
+		f.flightLogApplyMainFrameTimeRollover(frame.(*MainFrame))
+
+		// Only attempt to validate the frame values if we have something to check it against
+		if !f.opts.Raw && f.mainStreamIsValid && !f.validateMainFrameValues(frame.(*MainFrame)) {
+			f.mainStreamIsValid = false
+			f.previousFrame1 = nil
+			f.previousFrame2 = nil
+		}
+
+		if f.mainStreamIsValid {
+			// TODO: Remove hard-coded field indexes
+			f.lastMainFrameIteration = frame.(*MainFrame).values[0]
+			f.lastMainFrameTime = frame.(*MainFrame).values[1]
+
+			// Rotate history buffers
+			f.previousFrame2 = f.previousFrame1
+			f.previousFrame1 = frame.(*MainFrame)
+		}
+
+		return f.mainStreamIsValid
 	}
 	return false
 }
 
-func (f *FrameReader) flightLogReaderInvalidateStream() {
-	f.MainStreamIsValid = false
-	f.Previous = nil
-	f.PreviousPrevious = nil
+// readBytesToNextFrame reads bytes until the begining of a frame is found or the end of the file is reached
+func (f *FrameReader) readBytesToNextFrame() ([]byte, error) {
+	values := []byte{}
+	for {
+		b, err := f.dec.NextByte()
+		if err != nil || bytes.IndexByte(LogFrameAllTypes, b) != -1 {
+			return values, err
+		}
+
+		b, err = f.dec.ReadByte()
+		if err != nil {
+			return values, err
+		}
+		values = append(values, b)
+	}
 }
 
-func (f *FrameReader) countIntentionallySkippedFramesTo(targetIteration int32) int32 {
-	count := 0
-
-	if f.LastMainFrameIteration == -1 {
-		// Haven't parsed a frame yet so there's no frames to skip
+func (f *FrameReader) countIntentionallySkippedFrames() int32 {
+	if f.lastMainFrameIteration == -1 {
 		return 0
 	}
 
-	for frameIndex := f.LastMainFrameIteration + 1; frameIndex < targetIteration; frameIndex++ {
-		if f.shouldHaveFrame(int(frameIndex)) {
-			count++
-		}
+	count := 0
+	for frameIndex := f.lastMainFrameIteration + 1; !f.frameExpected(int(frameIndex)); frameIndex++ {
+		count++
 	}
 
 	return int32(count)
+}
+
+func (f *FrameReader) frameExpected(frameIndex int) bool {
+	return (frameIndex%f.frameDef.Sysconfig.FrameIntervalI+f.frameDef.Sysconfig.FrameIntervalPNum-1)%f.frameDef.Sysconfig.FrameIntervalPDenom < f.frameDef.Sysconfig.FrameIntervalPNum
 }
 
 func (f *FrameReader) flightLogApplyMainFrameTimeRollover(frame *MainFrame) {
@@ -385,49 +217,34 @@ func (f *FrameReader) flightLogApplyMainFrameTimeRollover(frame *MainFrame) {
 }
 
 func (f *FrameReader) flightLogDetectAndApplyTimestampRollover(timestamp int32) int32 {
-	if f.LastMainFrameTime != -1 {
-		if timestamp < f.LastMainFrameTime && timestamp-f.LastMainFrameTime < maximumTimeJumpBetweenFrames {
-			f.timeRolloverAccumulator = 2147483647
-		}
+	if f.lastMainFrameTime == -1 {
+		return timestamp + f.timeRolloverAccumulator
+	}
+
+	if timestamp < f.lastMainFrameTime && timestamp-f.lastMainFrameTime < maximumTimeJumpBetweenFrames {
+		//TODO: Fix when provided data is raw
+		//f.timeRolloverAccumulator += 2147483647
 	}
 
 	return timestamp + f.timeRolloverAccumulator
 }
 
-// verifyFrameMainValues verifies if the frame's loopIteration and time makes sense
-func (f *FrameReader) verifyFrameMainValues(frame *MainFrame) bool {
-	return frame.values[0] >= f.LastMainFrameIteration &&
-		frame.values[0] < f.LastMainFrameIteration+maximumIterationJumpBetweenFrames &&
-		frame.values[1] >= f.LastMainFrameTime &&
-		frame.values[1] < f.LastMainFrameTime+maximumTimeJumpBetweenFrames
-}
-
-func (f *FrameReader) countIntentionallySkippedFrames() int32 {
-	count := 0
-	if f.LastMainFrameIteration == -1 {
-		// Haven't parsed a frame yet so there's no frames to skip
-		return 0
-	}
-
-	for frameIndex := f.LastMainFrameIteration + 1; !f.shouldHaveFrame(int(frameIndex)); frameIndex++ {
-		count++
-	}
-
-	return int32(count)
-}
-
-func (f *FrameReader) shouldHaveFrame(frameIndex int) bool {
-	return (frameIndex%f.frameIntervalI+f.frameIntervalPNum-1)%f.frameIntervalPDenom < f.frameIntervalPNum
+// validateMainFrameValues verifies if the frame's loopIteration and time makes sense
+func (f *FrameReader) validateMainFrameValues(frame *MainFrame) bool {
+	//TODO: Remove hard-coded indexes
+	return frame.values[0] >= f.lastMainFrameIteration &&
+		frame.values[0] < f.lastMainFrameIteration+maximumIterationJumpBetweenFrames &&
+		frame.values[1] >= f.lastMainFrameTime &&
+		frame.values[1] < f.lastMainFrameTime+maximumTimeJumpBetweenFrames
 }
 
 func frameErrorLengthLimit(size int) error {
-	return errors.Errorf(
-		"FrameReader: previous frame was corrupt, main stream is not valid anymore, frame size %d is bigger than expected %d",
-		size,
-		logEventMaxFrameLength,
-	)
+	return errors.Errorf("frame size %d is bigger than the maximum allowed value %d", size, maxFrameLength)
 }
 
-func frameErrorUnsupportedType(frameType LogFrameType) error {
+func frameErrorUnsupportedType(frameType LogFrameType, err error) error {
+	if err != nil {
+		return errors.Errorf("Frame type '%s' (b'%b') is not supported: %v", string(frameType), frameType, err)
+	}
 	return errors.Errorf("Frame type '%s' (b'%b') is not supported", string(frameType), frameType)
 }

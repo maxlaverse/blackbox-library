@@ -28,8 +28,8 @@ const (
 	EncodingNull = 9
 )
 
-// ParseFrame parse any kind of data frame and applies prediction
-func ParseFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame, previousPreviousFrame *MainFrame, dec *stream.Decoder, disablePredicator bool, skippedFrames int32) ([]int32, error) {
+// parseStateFrame parse any kind of data frame and applies prediction
+func parseStateFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame, previousPreviousFrame *MainFrame, dec *stream.Decoder, disablePredicator bool, skippedFrames int32) ([]int32, error) {
 	frameValues := make([]int32, len(fields))
 	framesToSkip := 0
 	for i, field := range fields {
@@ -40,7 +40,7 @@ func ParseFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame,
 		}
 
 		// Don't calculate absolute values based on previous Frames
-		if disablePredicator {
+		if disablePredicator && field.Name != FieldIteration {
 			field.Predictor = PredictorZero
 		}
 

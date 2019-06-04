@@ -41,10 +41,12 @@ type Frame interface {
 	Values() interface{}
 	Sizer
 	Errorer
+	Validater
 }
 
 type Sizer interface {
 	Size() int
+	Start() int
 }
 
 type Errorer interface {
@@ -54,14 +56,20 @@ type Errorer interface {
 	setError(err error)
 }
 
+type Validater interface {
+	Validity() bool
+	setValidity(validity bool)
+}
+
 // -------------------------------------------------------------------------- //
 
 type baseFrame struct {
 	frameType LogFrameType
 	values    interface{}
-	error     error
+	err       error
 	start     int64
 	end       int64
+	validity  bool
 }
 
 func (f baseFrame) Type() LogFrameType {
@@ -77,12 +85,25 @@ func (f baseFrame) Size() int {
 	return int(f.end - f.start)
 }
 
+// Start returns the Start in bytes of a Frame
+func (f baseFrame) Start() int {
+	return int(f.start)
+}
+
 func (f baseFrame) Error() error {
-	return f.error
+	return f.err
 }
 
 func (f *baseFrame) setError(err error) {
-	f.error = err
+	f.err = err
+}
+
+func (f baseFrame) Validity() bool {
+	return f.validity
+}
+
+func (f *baseFrame) setValidity(validity bool) {
+	f.validity = validity
 }
 
 // -------------------------------------------------------------------------- //
@@ -94,13 +115,14 @@ type MainFrame struct {
 }
 
 // NewFrame returns a new frame
-func NewMainFrame(frameType LogFrameType, values []int32, start, end int64) *MainFrame {
+func NewMainFrame(frameType LogFrameType, values []int32, start, end int64, err error) *MainFrame {
 	return &MainFrame{
 		values: values,
 		baseFrame: baseFrame{
 			frameType: frameType,
 			start:     start,
 			end:       end,
+			err:       err,
 		},
 	}
 }
@@ -111,20 +133,39 @@ func (f MainFrame) Values() interface{} {
 
 // -------------------------------------------------------------------------- //
 
-// Frame represents a frame
+// SlowFrame represents a slow frame
 type SlowFrame struct {
 	baseFrame
 	values []int32
 }
 
-// NewFrame returns a new frame
-func NewSlowFrame(values []int32, start, end int64) *SlowFrame {
+// NewSlowFrame returns a new frame
+func NewSlowFrame(values []int32, start, end int64, err error) *SlowFrame {
 	return &SlowFrame{
 		values: values,
 		baseFrame: baseFrame{
 			frameType: LogFrameSlow,
 			start:     start,
 			end:       end,
+			err:       err,
+		},
+	}
+}
+
+// ErrorFrame represents a frame that couldn't be recognized
+type ErrorFrame struct {
+	baseFrame
+	values []byte
+}
+
+func NewErrorFrame(values []byte, start, end int64, err error) *ErrorFrame {
+	return &ErrorFrame{
+		values: values,
+		baseFrame: baseFrame{
+			frameType: 0,
+			start:     start,
+			end:       end,
+			err:       err,
 		},
 	}
 }
@@ -188,7 +229,7 @@ type EventFrame struct {
 	values    eventValues
 }
 
-func NewEventFrame(eventType LogEventType, values eventValues, start, end int64) *EventFrame {
+func NewEventFrame(eventType LogEventType, values eventValues, start, end int64, err error) *EventFrame {
 	return &EventFrame{
 		eventType: eventType,
 		values:    values,
@@ -196,6 +237,7 @@ func NewEventFrame(eventType LogEventType, values eventValues, start, end int64)
 			frameType: LogFrameEvent,
 			start:     start,
 			end:       end,
+			err:       err,
 		},
 	}
 }

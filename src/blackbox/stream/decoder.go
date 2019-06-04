@@ -17,21 +17,21 @@ const (
 
 // Decoder can read various form of encoded bytes
 type Decoder struct {
-	reader        *bufio.Reader
-	statBytesRead int64
+	reader *bufio.Reader
+	offset int64
 }
 
 // NewDecoder returns a new instance of a Decoder
 func NewDecoder(reader io.Reader) *Decoder {
 	return &Decoder{
-		reader:        bufio.NewReaderSize(reader, 8*1024),
-		statBytesRead: 0,
+		reader: bufio.NewReaderSize(reader, 8*1024),
+		offset: 0,
 	}
 }
 
-// BytesRead returns the number of bytes read
-func (d *Decoder) BytesRead() int64 {
-	return d.statBytesRead
+// Offset returns the offset in the current file
+func (d *Decoder) Offset() int64 {
+	return d.offset
 }
 
 // ReadByte reads one byte
@@ -63,7 +63,7 @@ func (d *Decoder) ReadBytes(number int) ([]byte, error) {
 	} else if err != nil {
 		return nil, ReadError{err}
 	}
-	d.statBytesRead += int64(n)
+	d.offset += int64(n)
 	return bytes, nil
 }
 

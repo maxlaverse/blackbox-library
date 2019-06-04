@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 )
 
+// HeaderName is the type for flight recorder headers
 type HeaderName string
 
 // List of all the headers used by the library
@@ -31,21 +32,24 @@ const (
 	HeaderMotorOutput     HeaderName = "motorOutput"
 	HeaderFirmwareType    HeaderName = "Firmware type"
 	HeaderIInterval       HeaderName = "I interval"
+	HeaderPInterval       HeaderName = "P interval"
+
+	headerRegExp = `H ([^:]+):(.*)`
 )
 
 // HeaderReader reads the headers of a log file
 type HeaderReader struct {
 	def LogDefinition
 	enc *stream.Decoder
+	re  *regexp.Regexp
 }
 
 // NewHeaderReader returns a new HeaderReader
 func NewHeaderReader(enc *stream.Decoder) HeaderReader {
 	return HeaderReader{
 		enc: enc,
-		def: LogDefinition{
-			Sysconfig: NewSysconfig(),
-		},
+		def: defaultLogDefinition(),
+		re:  regexp.MustCompile(headerRegExp),
 	}
 }
 
@@ -60,28 +64,26 @@ func (h *HeaderReader) ProcessHeaders() (LogDefinition, error) {
 			return h.def, nil
 		}
 
-		var truc []string
+		var byteBuffer []string
 		for {
 			iteration, err := h.enc.ReadByte()
 			if err != nil {
 				return h.def, errors.WithStack(err)
 			}
 			if string(iteration) == "\n" {
-				err := h.parseHeader(strings.Join(truc, ""))
+				err := h.parseHeader(strings.Join(byteBuffer, ""))
 				if err != nil {
 					return h.def, err
 				}
 				break
 			}
-
-			truc = append(truc, string(iteration))
+			byteBuffer = append(byteBuffer, string(iteration))
 		}
 	}
 }
 
 func (h *HeaderReader) parseHeader(out string) error {
-	re := regexp.MustCompile(`H ([^:]+):(.*)`)
-	match := re.FindStringSubmatch(out)
+	match := h.re.FindStringSubmatch(out)
 
 	switch HeaderName(match[1]) {
 	case HeaderProduct:
@@ -269,6 +271,32 @@ func (h *HeaderReader) parseHeader(out string) error {
 			return errors.Errorf("Could not parse second part of fieldMotorOutput '%s' to int", vals[1])
 		}
 		h.def.Sysconfig.MotorOutputHigh = int(val)
+	case HeaderIInterval:
+		frameIntervalI, err := strconv.ParseInt(match[2], 10, 32)
+		if err != nil {
+			panic(err)
+		}
+		if frameIntervalI < 1 {
+			frameIntervalI = 1
+		}
+		h.def.Sysconfig.FrameIntervalI = int(frameIntervalI)
+
+	case HeaderPInterval:
+		parts := strings.Split(match[2], "/")
+
+		if len(parts) > 1 {
+			frameIntervalPNum, err := strconv.ParseInt(parts[0], 10, 32)
+			if err != nil {
+				panic(err)
+			}
+			h.def.Sysconfig.FrameIntervalPNum = int(frameIntervalPNum)
+
+			frameIntervalPDeNum, err := strconv.ParseInt(parts[1], 10, 32)
+			if err != nil {
+				panic(err)
+			}
+			h.def.Sysconfig.FrameIntervalPDenom = int(frameIntervalPDeNum)
+		}
 
 	default:
 		header := Header{

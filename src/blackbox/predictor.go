@@ -71,10 +71,16 @@ func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, pre
 		if previous == nil {
 			break
 		}
+		if previous2 == nil {
+			return value, errors.New("Not enough frames provided to apply predicate")
+		}
 		value = value + 2*previous.values[fieldIndex] - previous2.values[fieldIndex]
 	case PredicatorAverage2:
 		if previous == nil {
 			break
+		}
+		if previous2 == nil {
+			return value, errors.New("Not enough frames provided to apply predicate")
 		}
 		value = value + (previous.values[fieldIndex]+previous2.values[fieldIndex])/2
 	case PredictorMinMotor:
