@@ -1,2 +1,3 @@
 bin/blackbox_decode
 output.yml
+coverage.txt

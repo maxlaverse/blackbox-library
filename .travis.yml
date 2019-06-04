@@ -12,3 +12,6 @@ install:
 
 script:
   - make test
+
+after_success:
+  - make cover

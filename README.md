@@ -1,7 +1,9 @@
 # Blackbox Library
 
 [![travis-ci](https://travis-ci.org/maxlaverse/blackbox-library.svg?branch=master)](https://travis-ci.org/maxlaverse/blackbox-library)
-[![coveralls](https://coveralls.io/repos/github/maxlaverse/blackbox-library/badge.svg?branch=master)](https://coveralls.io/github/maxlaverse/blackbox-library?branch=master)
+[![codecov](https://codecov.io/gh/maxlaverse/blackbox-library/branch/master/graph/badge.svg)](https://codecov.io/gh/maxlaverse/blackbox-library)
+
+
 
 A cross-platform library to read [Cleanflight]/[Betaflight] blackbox flight logs.
 
