@@ -32,6 +32,12 @@ func main() {
 			flag.Set("v", strconv.Itoa(opts.verbose))
 			flag.CommandLine.Parse([]string{})
 		},
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return fmt.Errorf("You need to provide the path to the logs")
+			}
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return export(args[0], opts)
 		},
@@ -42,7 +48,7 @@ func main() {
 	cmd.Flags().BoolVarP(&opts.debug, "debug", "", false, "Show extra debugging information")
 
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		fmt.Fprintf(os.Stderr, "Unexpected resut: %v\n", err)
 		os.Exit(1)
 	}
 }
