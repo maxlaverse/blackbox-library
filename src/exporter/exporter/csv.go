@@ -129,7 +129,7 @@ func (e *CsvFrameExporter) friendlyMainFrameValues(valuesS []int32) []string {
 
 func (e *CsvFrameExporter) writeBytes(data []byte) error {
 	_, err := e.target.Write(data)
-	return err
+	return errors.WithStack(err)
 }
 
 func (e *CsvFrameExporter) writeLn(data string) error {
