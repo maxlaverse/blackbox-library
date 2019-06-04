@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var flightModeNames = map[int32]string{
+var flightModeNames = map[int64]string{
 	1:   "ANGLE_MODE",
 	2:   "HORIZON_MODE",
 	4:   "MAG",
@@ -19,7 +19,7 @@ var flightModeNames = map[int32]string{
 	512: "SONAR",
 }
 
-var flightStateNames = map[int32]string{
+var flightStateNames = map[int64]string{
 	1:  "GPS_FIX_HOME",
 	2:  "GPS_FIX",
 	4:  "CALIBRATE_MAG",
@@ -111,11 +111,11 @@ func (f *baseFrame) setValidity(validity bool) {
 // Frame represents a frame
 type MainFrame struct {
 	baseFrame
-	values []int32
+	values []int64
 }
 
 // NewFrame returns a new frame
-func NewMainFrame(frameType LogFrameType, values []int32, start, end int64, err error) *MainFrame {
+func NewMainFrame(frameType LogFrameType, values []int64, start, end int64, err error) *MainFrame {
 	return &MainFrame{
 		values: values,
 		baseFrame: baseFrame{
@@ -136,11 +136,11 @@ func (f MainFrame) Values() interface{} {
 // SlowFrame represents a slow frame
 type SlowFrame struct {
 	baseFrame
-	values []int32
+	values []int64
 }
 
 // NewSlowFrame returns a new frame
-func NewSlowFrame(values []int32, start, end int64, err error) *SlowFrame {
+func NewSlowFrame(values []int64, start, end int64, err error) *SlowFrame {
 	return &SlowFrame{
 		values: values,
 		baseFrame: baseFrame{
@@ -186,7 +186,7 @@ func (f SlowFrame) String() string {
 	return fmt.Sprintf("S frame: %s", strings.Join(f.StringValues(), ", "))
 }
 
-func slowFrameFlagToString(fieldIndex int, value int32) string {
+func slowFrameFlagToString(fieldIndex int, value int64) string {
 	switch fieldIndex {
 	case 0:
 		return decodeFlagsToString(flightModeNames, value)
@@ -199,7 +199,7 @@ func slowFrameFlagToString(fieldIndex int, value int32) string {
 	}
 }
 
-func decodeFlagsToString(flags map[int32]string, flagValue int32) string {
+func decodeFlagsToString(flags map[int64]string, flagValue int64) string {
 	flagsAsStrings := []string{}
 	for k, v := range flags {
 		if flagValue&k == k {
@@ -212,7 +212,7 @@ func decodeFlagsToString(flags map[int32]string, flagValue int32) string {
 	return strings.Join(flagsAsStrings, "|")
 }
 
-func decodeEnumToString(enum []string, value int32) string {
+func decodeEnumToString(enum []string, value int64) string {
 	if int(value) >= len(enum) {
 		return fmt.Sprintf("%d", value)
 	}

@@ -33,7 +33,7 @@ func TestReadFrameS(t *testing.T) {
 
 	frame := frameReader.ReadNextFrame()
 	assert.NoError(t, frame.Error())
-	assert.Equal(t, valid(NewSlowFrame([]int32{}, 0, 1, nil)), frame)
+	assert.Equal(t, valid(NewSlowFrame([]int64{}, 0, 1, nil)), frame)
 }
 
 func TestReadFrameEventLoggingResume(t *testing.T) {
@@ -47,8 +47,8 @@ func TestReadFrameEventLoggingResume(t *testing.T) {
 	frame := frameReader.ReadNextFrame()
 	assert.NoError(t, frame.Error())
 
-	expectedTime := int32(55158008)
-	expectedIteration := int32(52992)
+	expectedTime := int64(55158008)
+	expectedIteration := int64(52992)
 	expectedFrameValues := eventValues{
 		"currentTime": expectedTime,
 		"iteration":   expectedIteration,

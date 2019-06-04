@@ -91,12 +91,12 @@ FrameReadingLoop:
 
 		// update our start timestamp when we see the first intra frame
 		if stats.Start.IsZero() && frame.Type() == LogFrameIntra {
-			stats.Start = time.Unix(0, int64(frame.Values().([]int32)[1])*1000)
+			stats.Start = time.Unix(0, int64(frame.Values().([]int64)[1])*1000)
 		}
 
 		// update our end timestamp everytime we see a frame
 		if frame.Type() == LogFrameIntra || frame.Type() == LogFrameInter {
-			stats.End = time.Unix(0, int64(frame.Values().([]int32)[1])*1000)
+			stats.End = time.Unix(0, int64(frame.Values().([]int64)[1])*1000)
 		}
 
 		// update some statistics

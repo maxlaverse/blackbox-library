@@ -29,14 +29,14 @@ func parseEventFrame(dec *stream.Decoder) (LogEventType, eventValues, error) {
 		if err != nil {
 			return 0, nil, err
 		}
-		values["iteration"] = int32(val)
+		values["iteration"] = int64(val)
 
 		val, err = dec.ReadUnsignedVB()
 		if err != nil {
 			return 0, nil, err
 		}
 		values["name"] = "Logging resume"
-		values["currentTime"] = int32(val)
+		values["currentTime"] = int64(val)
 
 	case LogEventFlightMode:
 		flags, err := dec.ReadUnsignedVB()

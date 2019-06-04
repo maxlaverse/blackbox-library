@@ -37,14 +37,14 @@ func NewCsvFrameExporter(file io.Writer, debugMode bool, frameDef blackbox.LogDe
 
 	return &CsvFrameExporter{
 		target:         file,
-		lastSlowFrame:  blackbox.NewSlowFrame([]int32{0, 0, 0, 0, 0}, 0, 0, nil),
+		lastSlowFrame:  blackbox.NewSlowFrame([]int64{0, 0, 0, 0, 0}, 0, 0, nil),
 		debugMode:      debugMode,
 		frameDef:       frameDef,
 		hasAmperageAdc: hasAmperageAdc,
 		batteryState: batteryState{
-			currentOffset: int32(frameDef.Sysconfig.CurrentMeterOffset),
+			currentOffset: int64(frameDef.Sysconfig.CurrentMeterOffset),
 			currentScale:  int32(frameDef.Sysconfig.CurrentMeterScale),
-			vbatScale:     int32(frameDef.Sysconfig.Vbatscale),
+			vbatScale:     int64(frameDef.Sysconfig.Vbatscale),
 		},
 	}
 }
@@ -98,7 +98,7 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 		}
 
 	case *blackbox.MainFrame:
-		values := e.friendlyMainFrameValues(frame.(*blackbox.MainFrame).Values().([]int32))
+		values := e.friendlyMainFrameValues(frame.(*blackbox.MainFrame).Values().([]int64))
 
 		if e.debugMode {
 			values = append(values, fmt.Sprintf("%s, offset: %d, size: %d", string(frame.Type()), frame.Start(), frame.Size()))
@@ -112,7 +112,7 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 	return nil
 }
 
-func (e *CsvFrameExporter) friendlyMainFrameValues(valuesS []int32) []string {
+func (e *CsvFrameExporter) friendlyMainFrameValues(valuesS []int64) []string {
 	var values []string
 	for k, v := range valuesS {
 		if i, _ := e.frameDef.GetFieldIndex(blackbox.FieldVbatLatest); k == i {

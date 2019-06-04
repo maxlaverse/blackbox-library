@@ -43,7 +43,7 @@ const (
 )
 
 // ApplyPrediction a predictor on a field and return the resulting value
-func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, predictor int, value int32, previous *MainFrame, previous2 *MainFrame) (int32, error) {
+func ApplyPrediction(frameDef LogDefinition, values []int64, fieldIndex int, predictor int, value int64, previous *MainFrame, previous2 *MainFrame) (int64, error) {
 
 	// First see if we have a prediction that doesn't require a previous frame as reference:
 	switch predictor {
@@ -51,7 +51,7 @@ func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, pre
 		// No correction to apply
 		break
 	case PredictorMinThrottle:
-		value += int32(frameDef.Sysconfig.MinThrottle)
+		value += int64(frameDef.Sysconfig.MinThrottle)
 	case Predictor1500:
 		value += 1500
 	case PredictorMotor0:
@@ -61,7 +61,7 @@ func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, pre
 		}
 		value += values[motor0idx]
 	case PredictorVbatRef:
-		value += int32(frameDef.Sysconfig.Vbatref)
+		value += int64(frameDef.Sysconfig.Vbatref)
 	case PredictorPrevious:
 		if previous == nil {
 			break
@@ -84,7 +84,7 @@ func ApplyPrediction(frameDef LogDefinition, values []int32, fieldIndex int, pre
 		}
 		value = value + (previous.values[fieldIndex]+previous2.values[fieldIndex])/2
 	case PredictorMinMotor:
-		value += int32(frameDef.Sysconfig.MotorOutputLow)
+		value += int64(frameDef.Sysconfig.MotorOutputLow)
 	default:
 		return value, errors.Errorf("Unsupported field predictor %d", predictor)
 	}

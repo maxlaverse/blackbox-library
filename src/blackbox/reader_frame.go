@@ -38,9 +38,9 @@ const (
 
 // FrameReader reads and decodes data frame
 type FrameReader struct {
-	timeRolloverAccumulator int32
-	lastMainFrameIteration  int32
-	lastMainFrameTime       int32
+	timeRolloverAccumulator int64
+	lastMainFrameIteration  int64
+	lastMainFrameTime       int64
 	mainStreamIsValid       bool
 	previousFrame1          *MainFrame
 	previousFrame2          *MainFrame
@@ -124,8 +124,8 @@ func (f *FrameReader) validateFrame(frame Frame) bool {
 	switch frame.Type() {
 	case LogFrameEvent:
 		if frame.(*EventFrame).EventType() == LogEventLoggingResume {
-			f.lastMainFrameIteration = frame.Values().(map[string]interface{})["iteration"].(int32)
-			f.lastMainFrameTime = frame.Values().(map[string]interface{})["currentTime"].(int32) + f.timeRolloverAccumulator
+			f.lastMainFrameIteration = frame.Values().(map[string]interface{})["iteration"].(int64)
+			f.lastMainFrameTime = frame.Values().(map[string]interface{})["currentTime"].(int64) + f.timeRolloverAccumulator
 		}
 		return true
 
@@ -145,7 +145,7 @@ func (f *FrameReader) validateFrame(frame Frame) bool {
 
 		if f.mainStreamIsValid {
 			f.lastMainFrameIteration = frame.(*MainFrame).values[0]
-			f.lastMainFrameTime = frame.(*MainFrame).values[1]
+			f.lastMainFrameTime = int64(frame.(*MainFrame).values[1])
 
 			// Rotate history buffers
 			f.previousFrame2 = frame.(*MainFrame)
@@ -166,7 +166,7 @@ func (f *FrameReader) validateFrame(frame Frame) bool {
 		if f.mainStreamIsValid {
 			// TODO: Remove hard-coded field indexes
 			f.lastMainFrameIteration = frame.(*MainFrame).values[0]
-			f.lastMainFrameTime = frame.(*MainFrame).values[1]
+			f.lastMainFrameTime = int64(frame.(*MainFrame).values[1])
 
 			// Rotate history buffers
 			f.previousFrame2 = f.previousFrame1
@@ -195,7 +195,7 @@ func (f *FrameReader) readBytesToNextFrame() ([]byte, error) {
 	}
 }
 
-func (f *FrameReader) countIntentionallySkippedFrames() int32 {
+func (f *FrameReader) countIntentionallySkippedFrames() int64 {
 	if f.lastMainFrameIteration == -1 {
 		return 0
 	}
@@ -205,7 +205,7 @@ func (f *FrameReader) countIntentionallySkippedFrames() int32 {
 		count++
 	}
 
-	return int32(count)
+	return int64(count)
 }
 
 func (f *FrameReader) frameExpected(frameIndex int) bool {
@@ -213,17 +213,17 @@ func (f *FrameReader) frameExpected(frameIndex int) bool {
 }
 
 func (f *FrameReader) flightLogApplyMainFrameTimeRollover(frame *MainFrame) {
-	frame.values[1] = f.flightLogDetectAndApplyTimestampRollover(frame.values[1])
+	frame.values[1] = f.flightLogDetectAndApplyTimestampRollover(int64(frame.values[1]))
 }
 
-func (f *FrameReader) flightLogDetectAndApplyTimestampRollover(timestamp int32) int32 {
+func (f *FrameReader) flightLogDetectAndApplyTimestampRollover(timestamp int64) int64 {
 	if f.lastMainFrameTime == -1 {
 		return timestamp + f.timeRolloverAccumulator
 	}
 
 	if timestamp < f.lastMainFrameTime && timestamp-f.lastMainFrameTime < maximumTimeJumpBetweenFrames {
 		//TODO: Fix when provided data is raw
-		//f.timeRolloverAccumulator += 2147483647
+		//f.timeRolloverAccumulator += 4294967296
 	}
 
 	return timestamp + f.timeRolloverAccumulator
@@ -234,8 +234,8 @@ func (f *FrameReader) validateMainFrameValues(frame *MainFrame) bool {
 	//TODO: Remove hard-coded indexes
 	return frame.values[0] >= f.lastMainFrameIteration &&
 		frame.values[0] < f.lastMainFrameIteration+maximumIterationJumpBetweenFrames &&
-		frame.values[1] >= f.lastMainFrameTime &&
-		frame.values[1] < f.lastMainFrameTime+maximumTimeJumpBetweenFrames
+		int64(frame.values[1]) >= f.lastMainFrameTime &&
+		int64(frame.values[1]) < f.lastMainFrameTime+maximumTimeJumpBetweenFrames
 }
 
 func frameErrorLengthLimit(size int) error {
