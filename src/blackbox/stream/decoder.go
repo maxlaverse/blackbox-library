@@ -44,6 +44,16 @@ func (d *Decoder) ReadByte() (byte, error) {
 	return bytes[0], nil
 }
 
+// ReadInt reads one byte as integer
+func (d *Decoder) ReadInt() (int32, error) {
+	bytes, err := d.ReadBytes(1)
+	if err != nil {
+		return 0, err
+	}
+
+	return int32(bytes[0]), nil
+}
+
 // ReadBytes reads multiple bytes
 func (d *Decoder) ReadBytes(number int) ([]byte, error) {
 	bytes := make([]byte, number)
@@ -191,7 +201,62 @@ func (d *Decoder) ReadTag2_3S32() ([]int32, error) {
 		values[2] = SignExtend6Bit(uint8(leadByte & 0x3F))
 	case 3:
 		// Fields are 8, 16 or 24 bits, read selector to figure out which field is which size
-		panic("Not implemented")
+		for i := 0; i < 3; i++ {
+			switch leadByte & 0x03 {
+			case 0: // 8-bit
+				byte1, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+				values[i] = byte1
+			case 1: // 16-bit
+				byte1, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+				byte2, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+
+				values[i] = byte1 | byte2<<8
+			case 2: // 24-bit
+				byte1, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+				byte2, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+				byte3, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+
+				values[i] = SignExtend24Bit(uint32(byte1 | (byte2 << 8) | (byte3 << 16)))
+			case 3: // 32-bit
+				byte1, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+				byte2, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+				byte3, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+				byte4, err := d.ReadInt()
+				if err != nil {
+					return values, err
+				}
+				// Sign-extend
+				values[i] = (byte1 | (byte2 << 8) | (byte3 << 16) | (byte4 << 24))
+			}
+			leadByte >>= 2
+		}
 	}
 	return values, nil
 }
