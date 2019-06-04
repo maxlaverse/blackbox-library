@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var flightModeNames = map[int32]string{
+var flightModeNames = map[int64]string{
 	1:   "ANGLE_MODE",
 	2:   "HORIZON_MODE",
 	4:   "MAG",
@@ -19,7 +19,7 @@ var flightModeNames = map[int32]string{
 	512: "SONAR",
 }
 
-var flightStateNames = map[int32]string{
+var flightStateNames = map[int64]string{
 	1:  "GPS_FIX_HOME",
 	2:  "GPS_FIX",
 	4:  "CALIBRATE_MAG",
@@ -41,10 +41,12 @@ type Frame interface {
 	Values() interface{}
 	Sizer
 	Errorer
+	Validater
 }
 
 type Sizer interface {
 	Size() int
+	Start() int
 }
 
 type Errorer interface {
@@ -54,14 +56,20 @@ type Errorer interface {
 	setError(err error)
 }
 
+type Validater interface {
+	Validity() bool
+	setValidity(validity bool)
+}
+
 // -------------------------------------------------------------------------- //
 
 type baseFrame struct {
 	frameType LogFrameType
 	values    interface{}
-	error     error
+	err       error
 	start     int64
 	end       int64
+	validity  bool
 }
 
 func (f baseFrame) Type() LogFrameType {
@@ -77,12 +85,25 @@ func (f baseFrame) Size() int {
 	return int(f.end - f.start)
 }
 
+// Start returns the Start in bytes of a Frame
+func (f baseFrame) Start() int {
+	return int(f.start)
+}
+
 func (f baseFrame) Error() error {
-	return f.error
+	return f.err
 }
 
 func (f *baseFrame) setError(err error) {
-	f.error = err
+	f.err = err
+}
+
+func (f baseFrame) Validity() bool {
+	return f.validity
+}
+
+func (f *baseFrame) setValidity(validity bool) {
+	f.validity = validity
 }
 
 // -------------------------------------------------------------------------- //
@@ -90,17 +111,18 @@ func (f *baseFrame) setError(err error) {
 // Frame represents a frame
 type MainFrame struct {
 	baseFrame
-	values []int32
+	values []int64
 }
 
 // NewFrame returns a new frame
-func NewMainFrame(frameType LogFrameType, values []int32, start, end int64) *MainFrame {
+func NewMainFrame(frameType LogFrameType, values []int64, start, end int64, err error) *MainFrame {
 	return &MainFrame{
 		values: values,
 		baseFrame: baseFrame{
 			frameType: frameType,
 			start:     start,
 			end:       end,
+			err:       err,
 		},
 	}
 }
@@ -111,20 +133,39 @@ func (f MainFrame) Values() interface{} {
 
 // -------------------------------------------------------------------------- //
 
-// Frame represents a frame
+// SlowFrame represents a slow frame
 type SlowFrame struct {
 	baseFrame
-	values []int32
+	values []int64
 }
 
-// NewFrame returns a new frame
-func NewSlowFrame(values []int32, start, end int64) *SlowFrame {
+// NewSlowFrame returns a new frame
+func NewSlowFrame(values []int64, start, end int64, err error) *SlowFrame {
 	return &SlowFrame{
 		values: values,
 		baseFrame: baseFrame{
 			frameType: LogFrameSlow,
 			start:     start,
 			end:       end,
+			err:       err,
+		},
+	}
+}
+
+// ErrorFrame represents a frame that couldn't be recognized
+type ErrorFrame struct {
+	baseFrame
+	values []byte
+}
+
+func NewErrorFrame(values []byte, start, end int64, err error) *ErrorFrame {
+	return &ErrorFrame{
+		values: values,
+		baseFrame: baseFrame{
+			frameType: 0,
+			start:     start,
+			end:       end,
+			err:       err,
 		},
 	}
 }
@@ -145,7 +186,7 @@ func (f SlowFrame) String() string {
 	return fmt.Sprintf("S frame: %s", strings.Join(f.StringValues(), ", "))
 }
 
-func slowFrameFlagToString(fieldIndex int, value int32) string {
+func slowFrameFlagToString(fieldIndex int, value int64) string {
 	switch fieldIndex {
 	case 0:
 		return decodeFlagsToString(flightModeNames, value)
@@ -158,7 +199,7 @@ func slowFrameFlagToString(fieldIndex int, value int32) string {
 	}
 }
 
-func decodeFlagsToString(flags map[int32]string, flagValue int32) string {
+func decodeFlagsToString(flags map[int64]string, flagValue int64) string {
 	flagsAsStrings := []string{}
 	for k, v := range flags {
 		if flagValue&k == k {
@@ -171,7 +212,7 @@ func decodeFlagsToString(flags map[int32]string, flagValue int32) string {
 	return strings.Join(flagsAsStrings, "|")
 }
 
-func decodeEnumToString(enum []string, value int32) string {
+func decodeEnumToString(enum []string, value int64) string {
 	if int(value) >= len(enum) {
 		return fmt.Sprintf("%d", value)
 	}
@@ -188,7 +229,7 @@ type EventFrame struct {
 	values    eventValues
 }
 
-func NewEventFrame(eventType LogEventType, values eventValues, start, end int64) *EventFrame {
+func NewEventFrame(eventType LogEventType, values eventValues, start, end int64, err error) *EventFrame {
 	return &EventFrame{
 		eventType: eventType,
 		values:    values,
@@ -196,6 +237,7 @@ func NewEventFrame(eventType LogEventType, values eventValues, start, end int64)
 			frameType: LogFrameEvent,
 			start:     start,
 			end:       end,
+			err:       err,
 		},
 	}
 }

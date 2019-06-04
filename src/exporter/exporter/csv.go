@@ -37,14 +37,14 @@ func NewCsvFrameExporter(file io.Writer, debugMode bool, frameDef blackbox.LogDe
 
 	return &CsvFrameExporter{
 		target:         file,
-		lastSlowFrame:  blackbox.NewSlowFrame([]int32{0, 0, 0, 0, 0}, 0, 0),
+		lastSlowFrame:  blackbox.NewSlowFrame([]int64{0, 0, 0, 0, 0}, 0, 0, nil),
 		debugMode:      debugMode,
 		frameDef:       frameDef,
 		hasAmperageAdc: hasAmperageAdc,
 		batteryState: batteryState{
-			currentOffset: int32(frameDef.Sysconfig.CurrentMeterOffset),
+			currentOffset: int64(frameDef.Sysconfig.CurrentMeterOffset),
 			currentScale:  int32(frameDef.Sysconfig.CurrentMeterScale),
-			vbatScale:     int32(frameDef.Sysconfig.Vbatscale),
+			vbatScale:     int64(frameDef.Sysconfig.Vbatscale),
 		},
 	}
 }
@@ -66,6 +66,14 @@ func (e *CsvFrameExporter) WriteHeaders() error {
 
 // WriteFrame writes a frame line into the CSV with friendly values
 func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
+	if frame.Error() != nil && e.debugMode {
+		_, err := e.target.Write([]byte(fmt.Sprintf("Frame '%s' with values %v has error: '%s', %s, offset: %d, size: %d\n", string(frame.Type()), frame.Values(), frame.Error(), string(frame.Type()), frame.Start(), frame.Size())))
+		if err != nil {
+			return errors.Wrapf(err, "could not write frame '%s' to target file", string(frame.Type()))
+		}
+		return nil
+	}
+
 	switch frame.(type) {
 
 	case *blackbox.EventFrame:
@@ -90,7 +98,11 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 		}
 
 	case *blackbox.MainFrame:
-		values := e.friendlyMainFrameValues(frame.(*blackbox.MainFrame).Values().([]int32))
+		values := e.friendlyMainFrameValues(frame.(*blackbox.MainFrame).Values().([]int64))
+
+		if e.debugMode {
+			values = append(values, fmt.Sprintf("%s, offset: %d, size: %d", string(frame.Type()), frame.Start(), frame.Size()))
+		}
 
 		err := e.writeLn(strings.Join(values, ", "))
 		if err != nil {
@@ -100,7 +112,7 @@ func (e *CsvFrameExporter) WriteFrame(frame blackbox.Frame) error {
 	return nil
 }
 
-func (e *CsvFrameExporter) friendlyMainFrameValues(valuesS []int32) []string {
+func (e *CsvFrameExporter) friendlyMainFrameValues(valuesS []int64) []string {
 	var values []string
 	for k, v := range valuesS {
 		if i, _ := e.frameDef.GetFieldIndex(blackbox.FieldVbatLatest); k == i {

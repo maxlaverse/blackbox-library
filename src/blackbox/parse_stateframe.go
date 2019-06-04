@@ -28,9 +28,9 @@ const (
 	EncodingNull = 9
 )
 
-// ParseFrame parse any kind of data frame and applies prediction
-func ParseFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame, previousPreviousFrame *MainFrame, dec *stream.Decoder, disablePredicator bool, skippedFrames int32) ([]int32, error) {
-	frameValues := make([]int32, len(fields))
+// parseStateFrame parse any kind of data frame and applies prediction
+func parseStateFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame, previousPreviousFrame *MainFrame, dec *stream.Decoder, disablePredicator bool, skippedFrames int64) ([]int64, error) {
+	frameValues := make([]int64, len(fields))
 	framesToSkip := 0
 	for i, field := range fields {
 		// Skip frames we exceptionnaly already read in the previous round
@@ -40,7 +40,7 @@ func ParseFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame,
 		}
 
 		// Don't calculate absolute values based on previous Frames
-		if disablePredicator {
+		if disablePredicator && field.Name != FieldIteration {
 			field.Predictor = PredictorZero
 		}
 
@@ -55,7 +55,7 @@ func ParseFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame,
 
 		// Decode the value for the current field
 		// This might lead to the next adjacent fields to be processed as well when reading arrays
-		value := int32(0)
+		value := int64(0)
 		switch field.Encoding {
 		case EncodingSignedVB:
 			val, err := dec.ReadSignedVB()
@@ -63,28 +63,28 @@ func ParseFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame,
 				return nil, err
 			}
 
-			value = val
+			value = int64(val)
 		case EncodingUnsignedVB:
 			val, err := dec.ReadUnsignedVB()
 			if err != nil {
 				return nil, err
 			}
 
-			value = int32(val)
+			value = int64(val)
 		case EncodingNeg14Bits:
 			val, err := dec.ReadUnsignedVB()
 			if err != nil {
 				return nil, err
 			}
 
-			value = -int32(stream.SignExtend14Bit(uint16(val)))
+			value = -int64(stream.SignExtend14Bit(uint16(val)))
 		case EncodingTag8_8SVB:
 			vals, err := dec.ReadTag8_8SVB(field.GroupCount)
 			if err != nil {
 				return nil, err
 			}
 			for j := 0; j < field.GroupCount; j++ {
-				v, err := ApplyPrediction(frameDef, vals, i+j, int(field.Predictor), vals[j], previousFrame, previousPreviousFrame)
+				v, err := ApplyPrediction(frameDef, vals, i+j, int(field.Predictor), int64(vals[j]), previousFrame, previousPreviousFrame)
 				if err != nil {
 					return nil, err
 				}
@@ -107,7 +107,7 @@ func ParseFrame(frameDef LogDefinition, fields []FieldDefinition, previousFrame,
 			framesToSkip = 2
 			continue
 		case EncodingTag8_4S16:
-			var vals []int32
+			var vals []int64
 			var err error
 			if frameDef.DataVersion == 1 {
 				vals, err = dec.ReadTag8_4S16V1()

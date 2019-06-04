@@ -84,10 +84,19 @@ type SysconfigType struct {
 	CurrentMeterScale      uint16
 	Vbatref                uint16
 	FirmwareType           string
+	FrameIntervalI         int
+	FrameIntervalPNum      int
+	FrameIntervalPDenom    int
 }
 
-// NewSysconfig returns a new Sysconfig with default value
-func NewSysconfig() SysconfigType {
+func defaultLogDefinition() LogDefinition {
+	return LogDefinition{
+		Sysconfig: defaultSysconfig(),
+	}
+}
+
+// defaultSysconfig returns a new Sysconfig with default value
+func defaultSysconfig() SysconfigType {
 	return SysconfigType{
 		MinThrottle:            1150,
 		MaxThrottle:            1850,
@@ -105,6 +114,9 @@ func NewSysconfig() SysconfigType {
 		CurrentMeterScale:      400,
 		Vbatref:                4095,
 		FirmwareType:           firmwareTypeUnknown,
+		FrameIntervalI:         1,
+		FrameIntervalPNum:      1,
+		FrameIntervalPDenom:    1,
 	}
 }
 

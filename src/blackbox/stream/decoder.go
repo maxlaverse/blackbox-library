@@ -17,21 +17,21 @@ const (
 
 // Decoder can read various form of encoded bytes
 type Decoder struct {
-	reader        *bufio.Reader
-	statBytesRead int64
+	reader *bufio.Reader
+	offset int64
 }
 
 // NewDecoder returns a new instance of a Decoder
 func NewDecoder(reader io.Reader) *Decoder {
 	return &Decoder{
-		reader:        bufio.NewReaderSize(reader, 8*1024),
-		statBytesRead: 0,
+		reader: bufio.NewReaderSize(reader, 8*1024),
+		offset: 0,
 	}
 }
 
-// BytesRead returns the number of bytes read
-func (d *Decoder) BytesRead() int64 {
-	return d.statBytesRead
+// Offset returns the offset in the current file
+func (d *Decoder) Offset() int64 {
+	return d.offset
 }
 
 // ReadByte reads one byte
@@ -45,13 +45,13 @@ func (d *Decoder) ReadByte() (byte, error) {
 }
 
 // ReadInt reads one byte as integer
-func (d *Decoder) ReadInt() (int32, error) {
+func (d *Decoder) ReadInt() (int64, error) {
 	bytes, err := d.ReadBytes(1)
 	if err != nil {
 		return 0, err
 	}
 
-	return int32(bytes[0]), nil
+	return int64(bytes[0]), nil
 }
 
 // ReadBytes reads multiple bytes
@@ -63,7 +63,7 @@ func (d *Decoder) ReadBytes(number int) ([]byte, error) {
 	} else if err != nil {
 		return nil, ReadError{err}
 	}
-	d.statBytesRead += int64(n)
+	d.offset += int64(n)
 	return bytes, nil
 }
 
@@ -130,14 +130,14 @@ func (d *Decoder) ReadSignedVB() (int32, error) {
 // least-signficant bit in the header corresponds to the first field to be
 // written. This header is followed by the values of only the fields which are
 // non-zero, written using signed variable byte encoding.
-func (d *Decoder) ReadTag8_8SVB(valueCount int) ([]int32, error) {
-	values := make([]int32, 8)
+func (d *Decoder) ReadTag8_8SVB(valueCount int) ([]int64, error) {
+	values := make([]int64, 8)
 	if valueCount == 1 {
 		val, err := d.ReadSignedVB()
 		if err != nil {
 			return values, err
 		}
-		values[0] = val
+		values[0] = int64(val)
 	} else {
 		val, err := d.ReadByte()
 		if err != nil {
@@ -150,7 +150,7 @@ func (d *Decoder) ReadTag8_8SVB(valueCount int) ([]int32, error) {
 				if err != nil {
 					return values, err
 				}
-				values[i] = val
+				values[i] = int64(val)
 			} else {
 				values[i] = 0
 			}
@@ -161,8 +161,8 @@ func (d *Decoder) ReadTag8_8SVB(valueCount int) ([]int32, error) {
 }
 
 // ReadTag2_3S32 returns
-func (d *Decoder) ReadTag2_3S32() ([]int32, error) {
-	values := make([]int32, 8)
+func (d *Decoder) ReadTag2_3S32() ([]int64, error) {
+	values := make([]int64, 8)
 	leadByte, err := d.ReadByte()
 	if err != nil {
 		return values, err
@@ -262,14 +262,14 @@ func (d *Decoder) ReadTag2_3S32() ([]int32, error) {
 }
 
 //ReadTag8_4S16V1 returns
-func (d *Decoder) ReadTag8_4S16V1() ([]int32, error) {
+func (d *Decoder) ReadTag8_4S16V1() ([]int64, error) {
 	// TODO: Implement
 	panic("Not implemented")
 }
 
 // ReadTag8_4S16V2 returns
-func (d *Decoder) ReadTag8_4S16V2() ([]int32, error) {
-	values := make([]int32, 8)
+func (d *Decoder) ReadTag8_4S16V2() ([]int64, error) {
+	values := make([]int64, 8)
 
 	selector, err := d.ReadByte()
 	if err != nil {
@@ -308,7 +308,7 @@ func (d *Decoder) ReadTag8_4S16V2() ([]int32, error) {
 					return values, err
 				}
 
-				values[i] = int32(val)
+				values[i] = int64(val)
 			} else {
 				char1 = buffer << 4
 				val, err := d.ReadByte()
@@ -318,7 +318,7 @@ func (d *Decoder) ReadTag8_4S16V2() ([]int32, error) {
 				buffer = uint8(val)
 
 				char1 |= buffer >> 4
-				values[i] = int32(char1)
+				values[i] = int64(char1)
 			}
 
 		case field16Bit: // 16-bit field
@@ -335,7 +335,7 @@ func (d *Decoder) ReadTag8_4S16V2() ([]int32, error) {
 				char2 = uint8(val)
 
 				//Sign extend...
-				values[i] = int32(uint16(((char1 << 8) | char2)))
+				values[i] = int64(uint16(((char1 << 8) | char2)))
 			} else {
 				/*
 				 * We're in the low 4 bits of the current buffer, then one byte, then the high 4 bits of the next
@@ -352,7 +352,7 @@ func (d *Decoder) ReadTag8_4S16V2() ([]int32, error) {
 				}
 				char2 = uint8(val)
 
-				values[i] = int32(uint16(((buffer << 12) | (char1 << 4) | (char2 >> 4))))
+				values[i] = int64(uint16(((buffer << 12) | (char1 << 4) | (char2 >> 4))))
 
 				buffer = char2
 			}

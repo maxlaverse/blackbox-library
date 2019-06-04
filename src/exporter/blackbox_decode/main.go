@@ -5,14 +5,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
-	"log"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 
 	"github.com/maxlaverse/blackbox-library/src/blackbox"
+	"github.com/maxlaverse/blackbox-library/src/blackbox/stream"
 	"github.com/maxlaverse/blackbox-library/src/exporter/exporter"
 	"github.com/spf13/cobra"
 )
@@ -77,7 +76,7 @@ func export(sourceFilepath string, opts cmdOptions) error {
 	// iterate over frames and write them to CSV
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
-	frameChan, err := flightLog.LoadFile(logFile, ctx)
+	frameChan, err := flightLog.LoadFile(ctx, logFile)
 	if err != nil {
 		return err
 	}
@@ -91,11 +90,9 @@ func export(sourceFilepath string, opts cmdOptions) error {
 
 	for frame := range frameChan {
 		// handle frame error
-		err := frame.Error()
-		if err != nil {
-			if isErrorRecoverable(err) {
-				log.Printf(`Frame '%s' with values %v has error: "%s"`, string(frame.Type()), frame.Values(), err.Error())
-			} else {
+		if err := frame.Error(); err != nil {
+			//TODO: Log offset and last id
+			if !isErrorRecoverable(err) {
 				cancel()
 				return err
 			}

@@ -28,19 +28,19 @@ var encodedFramesP = [][]byte{
 	[]byte{80, 6, 2, 0, 0, 0, 11, 47, 0, 0, 0, 0, 0, 0, 0, 4, 2, 0, 0, 0, 5, 19, 1, 0, 87, 156, 1, 155, 1, 90},
 }
 
-var decodedRawFrameI = []int32([]int32{53632, 55318011, 0, 2, 0, 3, -2, -2, 5, 3, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, -233, 723, 785, -1, -2, 0, 27, 58, 2237, 2, 7, 0, 0, 396, -18, 18, 19})
+var decodedRawFrameI = []int64([]int64{53632, 55318011, 0, 2, 0, 3, -2, -2, 5, 3, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, -233, 723, 785, -1, -2, 0, 27, 58, 2237, 2, 7, 0, 0, 396, -18, 18, 19})
 
-var decodedRawFrameP = []int32([]int32{0, 495, -1, 0, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, -1, -4, -4, 2, 6, 1, 0, 29, -26, 28, -31})
+var decodedRawFrameP = []int64([]int64{1, 495, -1, 0, 0, 0, 0, 0, 0, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, -1, -4, -4, 2, 6, 1, 0, 29, -26, 28, -31})
 
-var decodedPredictedFrameI = []int32([]int32{53632, 55318011, 0, 2, 0, 3, -2, -2, 5, 3, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, -1, -2, 0, 27, 58, 2237, 2, 7, 0, 0, 584, 566, 602, 603})
+var decodedPredictedFrameI = []int64([]int64{53632, 55318011, 0, 2, 0, 3, -2, -2, 5, 3, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, -1, -2, 0, 27, 58, 2237, 2, 7, 0, 0, 584, 566, 602, 603})
 
-var decodedPredictedFramesP = [][]int32{
-	[]int32([]int32{53633, 55318506, -1, 2, 0, 3, -2, -2, 5, 17, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, 0, -2, 0, 26, 54, 2233, 4, 13, 1, 0, 613, 540, 630, 572}),
-	[]int32([]int32{53634, 55319013, 0, 5, 0, 3, -2, -2, 4, 27, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, -2, -4, 0, 26, 54, 2233, 2, 13, 1, 0, 634, 513, 656, 553}),
-	[]int32([]int32{53635, 55319506, 0, 7, 0, 3, -2, -2, 8, 36, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, -2, -5, 0, 26, 52, 2231, 1, 9, 1, 0, 647, 488, 682, 538}),
-	[]int32([]int32{53636, 55320009, 0, 5, 0, 3, -2, -2, 7, 37, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, -1, -4, -1, 26, 52, 2231, 0, 4, 1, 0, 648, 494, 678, 536}),
-	[]int32([]int32{53637, 55320509, -2, 0, 0, 3, -2, -2, 1, 24, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1673, 687, 785, 0, 0, -1, 26, 51, 2231, -2, -3, 1, 0, 629, 540, 631, 556}),
-	[]int32([]int32{53638, 55321012, -1, 0, 0, 3, -2, -2, -5, 0, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1673, 687, 785, 0, 0, 0, 26, 51, 2231, -4, -10, 0, 0, 594, 595, 576, 591}),
+var decodedPredictedFramesP = [][]int64{
+	[]int64([]int64{53633, 55318506, -1, 2, 0, 3, -2, -2, 5, 17, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, 0, -2, 0, 26, 54, 2233, 4, 13, 1, 0, 613, 540, 630, 572}),
+	[]int64([]int64{53634, 55319013, 0, 5, 0, 3, -2, -2, 4, 27, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, -2, -4, 0, 26, 54, 2233, 2, 13, 1, 0, 634, 513, 656, 553}),
+	[]int64([]int64{53635, 55319506, 0, 7, 0, 3, -2, -2, 8, 36, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, -2, -5, 0, 26, 52, 2231, 1, 9, 1, 0, 647, 488, 682, 538}),
+	[]int64([]int64{53636, 55320009, 0, 5, 0, 3, -2, -2, 7, 37, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1632, 723, 785, -1, -4, -1, 26, 52, 2231, 0, 4, 1, 0, 648, 494, 678, 536}),
+	[]int64([]int64{53637, 55320509, -2, 0, 0, 3, -2, -2, 1, 24, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1673, 687, 785, 0, 0, -1, 26, 51, 2231, -2, -3, 1, 0, 629, 540, 631, 556}),
+	[]int64([]int64{53638, 55321012, -1, 0, 0, 3, -2, -2, -5, 0, 0, 0, 0, -2, 0, 0, 1216, -1, 0, 0, 216, 1673, 687, 785, 0, 0, 0, 26, 51, 2231, -4, -10, 0, 0, 594, 595, 576, 591}),
 }
 
 func TestParseFrameIRaw(t *testing.T) {
@@ -49,7 +49,7 @@ func TestParseFrameIRaw(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	res, err := ParseFrame(frameDef, frameDef.FieldsI, nil, nil, dec, true, 0)
+	res, err := parseStateFrame(frameDef, frameDef.FieldsI, nil, nil, dec, true, 0)
 	assert.Nil(t, err)
 	assert.Equal(t, decodedRawFrameI, res)
 }
@@ -60,7 +60,7 @@ func TestParseFrameIPredicted(t *testing.T) {
 
 	frameDef := dummyFrameDefinition()
 
-	res, err := ParseFrame(frameDef, frameDef.FieldsI, nil, nil, dec, false, 0)
+	res, err := parseStateFrame(frameDef, frameDef.FieldsI, nil, nil, dec, false, 0)
 
 	assert.Nil(t, err)
 	assert.Equal(t, decodedPredictedFrameI, res)
@@ -71,7 +71,7 @@ func TestParseFramePRaw(t *testing.T) {
 	dec := stream.NewDecoder(r)
 	frameDef := dummyFrameDefinition()
 
-	res, err := ParseFrame(frameDef, frameDef.FieldsP, nil, nil, dec, true, 0)
+	res, err := parseStateFrame(frameDef, frameDef.FieldsP, nil, nil, dec, true, 0)
 
 	assert.Nil(t, err)
 	assert.Equal(t, decodedRawFrameP, res)
@@ -82,7 +82,7 @@ func TestParseFramePPredicted(t *testing.T) {
 	dec := stream.NewDecoder(r)
 	frameDef := dummyFrameDefinition()
 
-	res, err := ParseFrame(frameDef, frameDef.FieldsI, nil, nil, dec, false, 0)
+	res, err := parseStateFrame(frameDef, frameDef.FieldsI, nil, nil, dec, false, 0)
 	assert.Nil(t, err)
 	assert.Equal(t, decodedPredictedFrameI, res)
 
@@ -95,7 +95,7 @@ func TestParseFramePPredicted(t *testing.T) {
 
 	for idx, decodedFrame := range decodedPredictedFramesP {
 		t.Run(fmt.Sprintf("for frame P%v", idx+1), func(t *testing.T) {
-			res, err := ParseFrame(frameDef, frameDef.FieldsP, previousFrame, previousPreviousFrame, dec, false, 0)
+			res, err := parseStateFrame(frameDef, frameDef.FieldsP, previousFrame, previousPreviousFrame, dec, false, 0)
 			assert.Nil(t, err)
 			assert.Equal(t, decodedFrame, res)
 
@@ -133,6 +133,9 @@ func dummyFrameDefinition() LogDefinition {
 			CurrentMeterScale:      282,
 			Vbatref:                1865,
 			FirmwareType:           "Cleanflight",
+			FrameIntervalI:         1,
+			FrameIntervalPNum:      1,
+			FrameIntervalPDenom:    1,
 		},
 		Headers: []Header{
 			Header{
