@@ -145,7 +145,7 @@ func (f *FrameReader) validateFrame(frame Frame) bool {
 
 		if f.mainStreamIsValid {
 			f.lastMainFrameIteration = frame.(*MainFrame).values[0]
-			f.lastMainFrameTime = int64(frame.(*MainFrame).values[1])
+			f.lastMainFrameTime = frame.(*MainFrame).values[1]
 
 			// Rotate history buffers
 			f.previousFrame2 = frame.(*MainFrame)
@@ -166,7 +166,7 @@ func (f *FrameReader) validateFrame(frame Frame) bool {
 		if f.mainStreamIsValid {
 			// TODO: Remove hard-coded field indexes
 			f.lastMainFrameIteration = frame.(*MainFrame).values[0]
-			f.lastMainFrameTime = int64(frame.(*MainFrame).values[1])
+			f.lastMainFrameTime = frame.(*MainFrame).values[1]
 
 			// Rotate history buffers
 			f.previousFrame2 = f.previousFrame1
@@ -213,19 +213,13 @@ func (f *FrameReader) frameExpected(frameIndex int) bool {
 }
 
 func (f *FrameReader) flightLogApplyMainFrameTimeRollover(frame *MainFrame) {
-	frame.values[1] = f.flightLogDetectAndApplyTimestampRollover(int64(frame.values[1]))
+	frame.values[1] = f.flightLogDetectAndApplyTimestampRollover(frame.values[1])
 }
 
 func (f *FrameReader) flightLogDetectAndApplyTimestampRollover(timestamp int64) int64 {
-	if f.lastMainFrameTime == -1 {
-		return timestamp + f.timeRolloverAccumulator
+	if f.lastMainFrameTime != -1 && uint32(timestamp) < uint32(f.lastMainFrameTime) && uint32(uint32(timestamp)-uint32(f.lastMainFrameTime)) < maximumTimeJumpBetweenFrames {
+		f.timeRolloverAccumulator += 4294967296
 	}
-
-	if timestamp < f.lastMainFrameTime && timestamp-f.lastMainFrameTime < maximumTimeJumpBetweenFrames {
-		//TODO: Fix when provided data is raw
-		//f.timeRolloverAccumulator += 4294967296
-	}
-
 	return timestamp + f.timeRolloverAccumulator
 }
 
@@ -234,8 +228,8 @@ func (f *FrameReader) validateMainFrameValues(frame *MainFrame) bool {
 	//TODO: Remove hard-coded indexes
 	return frame.values[0] >= f.lastMainFrameIteration &&
 		frame.values[0] < f.lastMainFrameIteration+maximumIterationJumpBetweenFrames &&
-		int64(frame.values[1]) >= f.lastMainFrameTime &&
-		int64(frame.values[1]) < f.lastMainFrameTime+maximumTimeJumpBetweenFrames
+		frame.values[1] >= f.lastMainFrameTime &&
+		frame.values[1] < f.lastMainFrameTime+maximumTimeJumpBetweenFrames
 }
 
 func frameErrorLengthLimit(size int) error {
